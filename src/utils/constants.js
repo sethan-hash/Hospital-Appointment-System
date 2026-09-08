@@ -18,6 +18,16 @@ export const APPOINTMENT_STATUS = {
   IN_PROGRESS: 'In Progress',
 };
 
+export const DEFAULT_RESCHEDULE_TIME_SLOTS = [
+  '09:00 AM',
+  '09:30 AM',
+  '10:00 AM',
+  '10:30 AM',
+  '11:00 AM',
+  '02:00 PM',
+  '03:00 PM',
+];
+
 export const BLOOD_TYPES = [
   { value: 'A+', label: 'A+' },
   { value: 'A-', label: 'A-' },

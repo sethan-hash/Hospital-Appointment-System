@@ -4,10 +4,9 @@ import { PatientLayout } from '../../layouts/PatientLayout';
 import { AppointmentCard } from '../../components/patient/AppointmentCard';
 import { StatCard } from '../../components/patient/StatCard';
 import { VisitListItem } from '../../components/patient/VisitListItem';
-import { Modal } from '../../components/common/Modal';
+import { RescheduleModal } from '../../components/patient/RescheduleModal';
+import { VisitDetailModal } from '../../components/patient/VisitDetailModal';
 import { Button } from '../../components/common/Button';
-import { Input } from '../../components/common/Input';
-import { Select } from '../../components/common/Select';
 import { usePatientProfile } from '../../hooks/usePatientProfile';
 import { useAppointments } from '../../hooks/useAppointments';
 
@@ -18,30 +17,6 @@ export function PatientDashboardPage() {
 
   const [isRescheduleOpen, setIsRescheduleOpen] = useState(false);
   const [selectedVisit, setSelectedVisit] = useState(null);
-  const [rescheduleData, setRescheduleData] = useState({
-    date: '2026-10-28',
-    time: '11:00 AM',
-  });
-  const [isSavingReschedule, setIsSavingReschedule] = useState(false);
-
-  const handleRescheduleSubmit = async (e) => {
-    e.preventDefault();
-    if (!upcomingAppointment) return;
-
-    setIsSavingReschedule(true);
-    try {
-      await rescheduleAppointment(
-        upcomingAppointment.id,
-        rescheduleData.date,
-        rescheduleData.time
-      );
-      setIsRescheduleOpen(false);
-    } catch (err) {
-      console.error('Failed to reschedule:', err);
-    } finally {
-      setIsSavingReschedule(false);
-    }
-  };
 
   return (
     <PatientLayout>
@@ -160,130 +135,18 @@ export function PatientDashboardPage() {
       </div>
 
       {/* Reschedule Appointment Modal */}
-      <Modal
+      <RescheduleModal
         isOpen={isRescheduleOpen}
         onClose={() => setIsRescheduleOpen(false)}
-        title="Reschedule Appointment"
-      >
-        <form onSubmit={handleRescheduleSubmit} className="space-y-4">
-          <p className="font-body-sm text-body-sm text-on-surface-variant">
-            Rescheduling with{' '}
-            <strong className="text-on-surface">
-              {upcomingAppointment?.doctorName}
-            </strong>
-          </p>
-
-          <Input
-            label="Select New Date"
-            id="reschedule-date"
-            type="date"
-            value={rescheduleData.date}
-            onChange={(e) =>
-              setRescheduleData((prev) => ({ ...prev, date: e.target.value }))
-            }
-            required
-          />
-
-          <Select
-            label="Select Time Slot"
-            id="reschedule-time"
-            options={[
-              '09:00 AM',
-              '09:30 AM',
-              '10:00 AM',
-              '10:30 AM',
-              '11:00 AM',
-              '02:00 PM',
-              '03:00 PM',
-            ]}
-            value={rescheduleData.time}
-            onChange={(e) =>
-              setRescheduleData((prev) => ({ ...prev, time: e.target.value }))
-            }
-            required
-          />
-
-          <div className="pt-2 flex gap-3 justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              size="md"
-              onClick={() => setIsRescheduleOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              size="md"
-              loading={isSavingReschedule}
-            >
-              Confirm Reschedule
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        appointment={upcomingAppointment}
+        onReschedule={rescheduleAppointment}
+      />
 
       {/* Visit Summary Detail Modal */}
-      <Modal
-        isOpen={!!selectedVisit}
+      <VisitDetailModal
+        visit={selectedVisit}
         onClose={() => setSelectedVisit(null)}
-        title={selectedVisit?.title || 'Visit Summary'}
-      >
-        {selectedVisit && (
-          <div className="space-y-4">
-            <div className="p-3 bg-surface-container-low rounded-lg">
-              <p className="font-label-md text-label-md text-on-surface-variant">
-                Date & Physician
-              </p>
-              <p className="font-body-md text-body-md text-on-surface font-semibold">
-                {selectedVisit.date} • {selectedVisit.doctor}
-              </p>
-            </div>
-
-            <div>
-              <h4 className="font-label-lg text-label-lg text-on-surface font-semibold mb-1">
-                Clinical Diagnosis
-              </h4>
-              <p className="font-body-md text-body-md text-on-surface-variant">
-                {selectedVisit.diagnosis}
-              </p>
-            </div>
-
-            <div>
-              <h4 className="font-label-lg text-label-lg text-on-surface font-semibold mb-1">
-                Physician Notes
-              </h4>
-              <p className="font-body-md text-body-md text-on-surface-variant">
-                {selectedVisit.notes}
-              </p>
-            </div>
-
-            {selectedVisit.prescriptions?.length > 0 && (
-              <div>
-                <h4 className="font-label-lg text-label-lg text-on-surface font-semibold mb-1">
-                  Prescriptions
-                </h4>
-                <ul className="list-disc list-inside text-body-sm text-on-surface-variant">
-                  {selectedVisit.prescriptions.map((rx, idx) => (
-                    <li key={idx}>{rx}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <div className="pt-2">
-              <Button
-                variant="primary"
-                fullWidth
-                onClick={() => setSelectedVisit(null)}
-              >
-                Close Summary
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
+      />
     </PatientLayout>
   );
 }
