@@ -9,7 +9,7 @@ import { Icon } from '../../components/common/Icon';
 import { useAuth } from '../../hooks/useAuth';
 import { usePatientProfile } from '../../hooks/usePatientProfile';
 import { BLOOD_TYPES } from '../../utils/constants';
-import patientAvatar from '../../assets/avatars/patient_arjun_sharma.jpg';
+import { DEFAULT_PATIENT_AVATAR } from '../../data/mockPatient';
 
 export function PatientAccountProfilePage() {
   const navigate = useNavigate();
@@ -46,7 +46,7 @@ export function PatientAccountProfilePage() {
         <Card className="p-6 md:p-8 flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
           <div className="relative">
             <img
-              src={profile?.avatar || patientAvatar}
+              src={profile?.avatar || DEFAULT_PATIENT_AVATAR}
               alt={formData.name}
               className="w-24 h-24 md:w-28 md:h-28 rounded-full object-cover shadow-sm border-2 border-primary/20"
             />

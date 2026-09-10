@@ -4,6 +4,7 @@ import { PatientLayout } from '../../layouts/PatientLayout';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Icon } from '../../components/common/Icon';
+import { RatingStars } from '../../components/common/RatingStars';
 import { DatePickerStrip } from '../../components/patient/DatePickerStrip';
 import { TimeSlotPicker } from '../../components/patient/TimeSlotPicker';
 import { useDoctor } from '../../hooks/useDoctor';
@@ -176,11 +177,7 @@ export function BookAppointmentPage() {
                   </div>
                 </div>
 
-                <div className="flex text-[#F59E0B] text-sm">
-                  {[...Array(5)].map((_, i) => (
-                    <Icon key={i} name="star" filled={true} className="text-base" />
-                  ))}
-                </div>
+                <RatingStars rating={doctor.reviews[0].rating} size="md" />
               </div>
               <p className="font-body-sm text-body-sm text-on-surface-variant">
                 "{doctor.reviews[0].comment}"

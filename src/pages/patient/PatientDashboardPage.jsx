@@ -10,7 +10,7 @@ import { Button } from '../../components/common/Button';
 import { PageHeader } from '../../components/common/PageHeader';
 import { usePatientProfile } from '../../hooks/usePatientProfile';
 import { useAppointments } from '../../hooks/useAppointments';
-import patientAvatar from '../../assets/avatars/patient_arjun_sharma.jpg';
+import { DEFAULT_PATIENT_AVATAR } from '../../data/mockPatient';
 
 export function PatientDashboardPage() {
   const navigate = useNavigate();
@@ -26,7 +26,7 @@ export function PatientDashboardPage() {
         {/* Greeting Section */}
         <section className="flex items-center gap-4">
           <img
-            src={profile?.avatar || patientAvatar}
+            src={profile?.avatar || DEFAULT_PATIENT_AVATAR}
             alt="Patient Profile"
             className="w-16 h-16 rounded-full object-cover shadow-sm border border-outline-variant/30 flex-shrink-0"
           />

@@ -5,6 +5,7 @@ import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 import { Icon } from '../../components/common/Icon';
+import { RatingStars } from '../../components/common/RatingStars';
 import { useDoctor } from '../../hooks/useDoctor';
 import { formatRating } from '../../utils/formatters';
 
@@ -168,13 +169,7 @@ export function DoctorProfilePage() {
                 <h3 className="text-5xl font-bold text-on-surface leading-none">
                   {formatRating(doctor.rating)}
                 </h3>
-                <div className="flex text-[#F59E0B] my-2">
-                  <Icon name="star" filled={true} className="text-xl" />
-                  <Icon name="star" filled={true} className="text-xl" />
-                  <Icon name="star" filled={true} className="text-xl" />
-                  <Icon name="star" filled={true} className="text-xl" />
-                  <Icon name="star_half" className="text-xl" />
-                </div>
+                <RatingStars rating={doctor.rating} className="my-2" />
                 <p className="text-body-sm text-on-surface-variant">
                   Based on {doctor.reviewCount} verified reviews
                 </p>
