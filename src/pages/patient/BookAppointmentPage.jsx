@@ -6,7 +6,7 @@ import { Button } from '../../components/common/Button';
 import { Icon } from '../../components/common/Icon';
 import { DatePickerStrip } from '../../components/patient/DatePickerStrip';
 import { TimeSlotPicker } from '../../components/patient/TimeSlotPicker';
-import { doctorService } from '../../services/doctorService';
+import { useDoctor } from '../../hooks/useDoctor';
 import { useAppointments } from '../../hooks/useAppointments';
 import { formatRating } from '../../utils/formatters';
 
@@ -15,32 +15,18 @@ export function BookAppointmentPage() {
   const navigate = useNavigate();
   const { bookNewAppointment } = useAppointments();
 
-  const [doctor, setDoctor] = useState(null);
+  const { doctor, loading } = useDoctor(doctorId || 'doc-1');
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split('T')[0]
   );
   const [selectedSlot, setSelectedSlot] = useState('10:00 AM');
-  const [loading, setLoading] = useState(true);
   const [isBooking, setIsBooking] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
-    setLoading(true);
-
-    doctorService.getDoctorById(doctorId || 'doc-1').then((doc) => {
-      if (isMounted) {
-        setDoctor(doc);
-        if (doc?.availableSlots?.length) {
-          setSelectedSlot(doc.availableSlots[0]);
-        }
-        setLoading(false);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [doctorId]);
+    if (doctor?.availableSlots?.length) {
+      setSelectedSlot(doctor.availableSlots[0]);
+    }
+  }, [doctor]);
 
   const handleConfirmAppointment = async () => {
     if (!doctor || !selectedDate || !selectedSlot) return;

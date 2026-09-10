@@ -1,34 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { PatientLayout } from '../../layouts/PatientLayout';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 import { Icon } from '../../components/common/Icon';
-import { doctorService } from '../../services/doctorService';
+import { useDoctor } from '../../hooks/useDoctor';
 import { formatRating } from '../../utils/formatters';
 
 export function DoctorProfilePage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [doctor, setDoctor] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true;
-    setLoading(true);
-
-    doctorService.getDoctorById(id).then((doc) => {
-      if (isMounted) {
-        setDoctor(doc);
-        setLoading(false);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [id]);
+  const { doctor, loading } = useDoctor(id);
 
   if (loading) {
     return (
