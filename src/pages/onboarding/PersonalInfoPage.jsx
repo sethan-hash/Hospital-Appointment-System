@@ -16,7 +16,7 @@ export function PersonalInfoPage() {
   const [formData, setFormData] = useState({
     dob: registrationDraft.dob || '1990-01-01',
     gender: registrationDraft.gender || 'male',
-    phone: registrationDraft.phone || '(555) 000-0000',
+    phone: registrationDraft.phone || '+91 98765 43210',
     emergencyContactName: registrationDraft.emergencyContact?.name || '',
     emergencyRelationship: registrationDraft.emergencyContact?.relationship || '',
     emergencyContactPhone: registrationDraft.emergencyContact?.phone || '',
@@ -115,7 +115,7 @@ export function PersonalInfoPage() {
             label="Phone Number"
             id="phone"
             type="tel"
-            placeholder="(555) 000-0000"
+            placeholder="+91 XXXXX XXXXX"
             value={formData.phone}
             onChange={handlePhoneChange}
             iconLeading="call"
@@ -163,7 +163,7 @@ export function PersonalInfoPage() {
               label="Contact Phone"
               id="ec_phone"
               type="tel"
-              placeholder="(555) 000-0000"
+              placeholder="+91 XXXXX XXXXX"
               value={formData.emergencyContactPhone}
               onChange={handleEmergencyPhoneChange}
               required

@@ -16,8 +16,8 @@ const MONTH_NAMES_FULL = [
 const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /**
- * Format date string into "Oct 24, 2023"
- * @param {string|Date} dateInput 
+ * Format date string into Indian long-form: "24 October 2026"
+ * @param {string|Date} dateInput
  * @returns {string}
  */
 export function formatDate(dateInput) {
@@ -25,10 +25,10 @@ export function formatDate(dateInput) {
   const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
   if (isNaN(date.getTime())) return String(dateInput);
 
-  const month = MONTH_NAMES_SHORT[date.getMonth()];
+  const month = MONTH_NAMES_FULL[date.getMonth()];
   const day = date.getDate();
   const year = date.getFullYear();
-  return `${month} ${day}, ${year}`;
+  return `${day} ${month} ${year}`;
 }
 
 /**

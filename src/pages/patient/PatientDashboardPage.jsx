@@ -10,6 +10,7 @@ import { Button } from '../../components/common/Button';
 import { PageHeader } from '../../components/common/PageHeader';
 import { usePatientProfile } from '../../hooks/usePatientProfile';
 import { useAppointments } from '../../hooks/useAppointments';
+import patientAvatar from '../../assets/avatars/patient_arjun_sharma.jpg';
 
 export function PatientDashboardPage() {
   const navigate = useNavigate();
@@ -25,15 +26,12 @@ export function PatientDashboardPage() {
         {/* Greeting Section */}
         <section className="flex items-center gap-4">
           <img
-            src={
-              profile?.avatar ||
-              'https://lh3.googleusercontent.com/aida-public/AB6AXuBwv7YvACnpxvfONcpHV6SwsdxDqAGb3L18VU93o1FllMvHljBvvDVh23T8_jnk4a02dQcZ15lpPvp8smnPFR3I-KXwsl3MVhhwCSeQutdoiKVg0UXDMh8oTAJTIVYU4vC9HfmJg7EEOo0eH7toaARnWiywQx0LV9GFmBvdGDXDaD_P_h7_LqumXJQyxugqXA6pu7WaN7Xe2LtIpHGrE3Pbm-CKLt63RjxivCu8DWKlPgTAsKklqGbE'
-            }
+            src={profile?.avatar || patientAvatar}
             alt="Patient Profile"
             className="w-16 h-16 rounded-full object-cover shadow-sm border border-outline-variant/30 flex-shrink-0"
           />
           <PageHeader
-            title={`Hello, ${profile?.name || 'John Doe'}`}
+            title={`Hello, ${profile?.name || 'Arjun Sharma'}`}
             subtitle="Here is a summary of your care plan."
             as="h2"
           />
@@ -78,7 +76,7 @@ export function PatientDashboardPage() {
           <StatCard
             icon="monitor_weight"
             iconColor="secondary"
-            value={profile?.vitals?.weight || '165 lbs'}
+            value={profile?.vitals?.weight || '72 kg'}
             label="Last Recorded"
           />
 

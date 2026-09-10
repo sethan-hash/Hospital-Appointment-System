@@ -41,7 +41,7 @@ export function BookAppointmentPage() {
         doctorImage: doctor.image,
         date: selectedDate,
         time: selectedSlot,
-        location: `${doctor.clinicName}, Room 304`,
+        location: `${doctor.clinicName}, Apollo Hospitals, Bengaluru – Room 304`,
       });
 
       navigate('/patient/appointments/confirmation', {

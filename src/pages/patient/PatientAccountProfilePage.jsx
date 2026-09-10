@@ -9,6 +9,7 @@ import { Icon } from '../../components/common/Icon';
 import { useAuth } from '../../hooks/useAuth';
 import { usePatientProfile } from '../../hooks/usePatientProfile';
 import { BLOOD_TYPES } from '../../utils/constants';
+import patientAvatar from '../../assets/avatars/patient_arjun_sharma.jpg';
 
 export function PatientAccountProfilePage() {
   const navigate = useNavigate();
@@ -17,14 +18,14 @@ export function PatientAccountProfilePage() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    name: profile?.name || 'John Doe',
-    email: profile?.email || 'patient@example.com',
-    phone: profile?.phone || '(555) 000-0000',
+    name: profile?.name || 'Arjun Sharma',
+    email: profile?.email || 'arjun.sharma@example.in',
+    phone: profile?.phone || '+91 98765 43210',
     bloodType: profile?.bloodType || 'O+',
     allergies: profile?.allergies || 'Penicillin',
     chronicConditions: profile?.chronicConditions || 'Mild Hypertension',
-    emergencyContactName: profile?.emergencyContact?.name || 'Jane Doe',
-    emergencyContactPhone: profile?.emergencyContact?.phone || '(555) 019-2834',
+    emergencyContactName: profile?.emergencyContact?.name || 'Meera Sharma',
+    emergencyContactPhone: profile?.emergencyContact?.phone || '+91 98765 00001',
   });
 
   const handleSave = (e) => {
@@ -45,10 +46,7 @@ export function PatientAccountProfilePage() {
         <Card className="p-6 md:p-8 flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
           <div className="relative">
             <img
-              src={
-                profile?.avatar ||
-                'https://lh3.googleusercontent.com/aida-public/AB6AXuBwv7YvACnpxvfONcpHV6SwsdxDqAGb3L18VU93o1FllMvHljBvvDVh23T8_jnk4a02dQcZ15lpPvp8smnPFR3I-KXwsl3MVhhwCSeQutdoiKVg0UXDMh8oTAJTIVYU4vC9HfmJg7EEOo0eH7toaARnWiywQx0LV9GFmBvdGDXDaD_P_h7_LqumXJQyxugqXA6pu7WaN7Xe2LtIpHGrE3Pbm-CKLt63RjxivCu8DWKlPgTAsKklqGbE'
-              }
+              src={profile?.avatar || patientAvatar}
               alt={formData.name}
               className="w-24 h-24 md:w-28 md:h-28 rounded-full object-cover shadow-sm border-2 border-primary/20"
             />

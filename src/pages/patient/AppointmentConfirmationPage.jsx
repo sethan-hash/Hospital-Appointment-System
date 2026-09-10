@@ -13,12 +13,12 @@ export function AppointmentConfirmationPage() {
   const appointment = location.state?.appointment;
 
   const demoAppointment = {
-    doctorName: 'Dr. Sarah Jenkins',
+    doctorName: 'Dr. Priya Nair',
     doctorTitle: 'Senior Cardiologist',
     department: 'Cardiology Dept.',
     date: '2026-10-24',
     time: '10:30 AM',
-    location: 'MedCenter Main Campus, Room 304',
+    location: 'Apollo Heart Institute, Apollo Hospitals, Bengaluru – Room 304',
     status: 'Confirmed',
   };
 
