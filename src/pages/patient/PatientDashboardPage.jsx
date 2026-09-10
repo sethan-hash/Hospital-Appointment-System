@@ -7,6 +7,7 @@ import { VisitListItem } from '../../components/patient/VisitListItem';
 import { RescheduleModal } from '../../components/patient/RescheduleModal';
 import { VisitDetailModal } from '../../components/patient/VisitDetailModal';
 import { Button } from '../../components/common/Button';
+import { PageHeader } from '../../components/common/PageHeader';
 import { usePatientProfile } from '../../hooks/usePatientProfile';
 import { useAppointments } from '../../hooks/useAppointments';
 
@@ -31,14 +32,11 @@ export function PatientDashboardPage() {
             alt="Patient Profile"
             className="w-16 h-16 rounded-full object-cover shadow-sm border border-outline-variant/30 flex-shrink-0"
           />
-          <div>
-            <h2 className="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg text-on-surface font-bold">
-              Hello, {profile?.name || 'John Doe'}
-            </h2>
-            <p className="font-body-md text-body-md text-on-surface-variant">
-              Here is a summary of your care plan.
-            </p>
-          </div>
+          <PageHeader
+            title={`Hello, ${profile?.name || 'John Doe'}`}
+            subtitle="Here is a summary of your care plan."
+            as="h2"
+          />
         </section>
 
         {/* Upcoming Appointment Bento Card */}

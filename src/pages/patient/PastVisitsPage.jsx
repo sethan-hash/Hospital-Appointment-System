@@ -4,6 +4,8 @@ import { PatientLayout } from '../../layouts/PatientLayout';
 import { Card } from '../../components/common/Card';
 import { VisitListItem } from '../../components/patient/VisitListItem';
 import { VisitDetailModal } from '../../components/patient/VisitDetailModal';
+import { PageHeader } from '../../components/common/PageHeader';
+import { FilterChip } from '../../components/common/FilterChip';
 import { usePatientProfile } from '../../hooks/usePatientProfile';
 
 export function PastVisitsPage() {
@@ -20,73 +22,33 @@ export function PastVisitsPage() {
   return (
     <PatientLayout showBack={true} onBack={() => navigate('/patient/dashboard')} title="Medical Records">
       <div className="space-y-6">
-        <div>
-          <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface font-bold">
-            Past Visits &amp; Medical Records
-          </h1>
-          <p className="font-body-md text-body-md text-on-surface-variant">
-            View consultation summaries, diagnostics, and immunization logs.
-          </p>
-        </div>
+        <PageHeader
+          title="Past Visits & Medical Records"
+          subtitle="View consultation summaries, diagnostics, and immunization logs."
+        />
 
         {/* Filter Pills */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-          <button
-            type="button"
+          <FilterChip
+            label="All Records"
+            isSelected={filterType === 'all'}
             onClick={() => setFilterType('all')}
-            className={`
-              px-4 py-2 rounded-full font-label-lg text-label-lg transition-all select-none
-              ${
-                filterType === 'all'
-                  ? 'bg-primary text-on-primary font-semibold shadow-sm'
-                  : 'bg-surface-container-lowest border border-outline-variant text-on-surface hover:bg-surface-container'
-              }
-            `}
-          >
-            All Records
-          </button>
-          <button
-            type="button"
+          />
+          <FilterChip
+            label="Checkups"
+            isSelected={filterType === 'checkup'}
             onClick={() => setFilterType('checkup')}
-            className={`
-              px-4 py-2 rounded-full font-label-lg text-label-lg transition-all select-none
-              ${
-                filterType === 'checkup'
-                  ? 'bg-primary text-on-primary font-semibold shadow-sm'
-                  : 'bg-surface-container-lowest border border-outline-variant text-on-surface hover:bg-surface-container'
-              }
-            `}
-          >
-            Checkups
-          </button>
-          <button
-            type="button"
+          />
+          <FilterChip
+            label="Vaccines"
+            isSelected={filterType === 'vaccine'}
             onClick={() => setFilterType('vaccine')}
-            className={`
-              px-4 py-2 rounded-full font-label-lg text-label-lg transition-all select-none
-              ${
-                filterType === 'vaccine'
-                  ? 'bg-primary text-on-primary font-semibold shadow-sm'
-                  : 'bg-surface-container-lowest border border-outline-variant text-on-surface hover:bg-surface-container'
-              }
-            `}
-          >
-            Vaccines
-          </button>
-          <button
-            type="button"
+          />
+          <FilterChip
+            label="Radiology & Labs"
+            isSelected={filterType === 'radiology'}
             onClick={() => setFilterType('radiology')}
-            className={`
-              px-4 py-2 rounded-full font-label-lg text-label-lg transition-all select-none
-              ${
-                filterType === 'radiology'
-                  ? 'bg-primary text-on-primary font-semibold shadow-sm'
-                  : 'bg-surface-container-lowest border border-outline-variant text-on-surface hover:bg-surface-container'
-              }
-            `}
-          >
-            Radiology &amp; Labs
-          </button>
+          />
         </div>
 
         {/* Records Card List */}

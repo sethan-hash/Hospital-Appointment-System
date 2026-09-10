@@ -4,6 +4,7 @@ import { PatientLayout } from '../../layouts/PatientLayout';
 import { AppointmentCard } from '../../components/patient/AppointmentCard';
 import { RescheduleModal } from '../../components/patient/RescheduleModal';
 import { Button } from '../../components/common/Button';
+import { PageHeader } from '../../components/common/PageHeader';
 import { EmptyState } from '../../components/feedback/EmptyState';
 import { useAppointments } from '../../hooks/useAppointments';
 
@@ -16,25 +17,20 @@ export function UpcomingAppointmentsPage() {
   return (
     <PatientLayout showBack={true} onBack={() => navigate('/patient/dashboard')} title="Appointments">
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface font-bold">
-              Upcoming Appointments
-            </h1>
-            <p className="font-body-md text-body-md text-on-surface-variant">
-              Manage and reschedule your scheduled consultations.
-            </p>
-          </div>
-
-          <Button
-            variant="primary"
-            size="md"
-            iconLeading="add"
-            onClick={() => navigate('/patient/doctors')}
-          >
-            Book New
-          </Button>
-        </div>
+        <PageHeader
+          title="Upcoming Appointments"
+          subtitle="Manage and reschedule your scheduled consultations."
+          action={
+            <Button
+              variant="primary"
+              size="md"
+              iconLeading="add"
+              onClick={() => navigate('/patient/doctors')}
+            >
+              Book New
+            </Button>
+          }
+        />
 
         {loading ? (
           <div className="p-12 text-center text-primary">Loading appointments...</div>

@@ -5,6 +5,8 @@ import { SpecialtyChip } from '../../components/patient/SpecialtyChip';
 import { EmptyState } from '../../components/feedback/EmptyState';
 import { Icon } from '../../components/common/Icon';
 import { Button } from '../../components/common/Button';
+import { PageHeader } from '../../components/common/PageHeader';
+import { FilterChip } from '../../components/common/FilterChip';
 import { useDoctors } from '../../hooks/useDoctors';
 import { MOCK_SPECIALTIES } from '../../data/mockSpecialties';
 
@@ -27,12 +29,12 @@ export function FindDoctorPage() {
       <div className="space-y-6">
         {/* Search Header Section */}
         <section>
-          <h2 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface mb-1">
-            Find a Specialist
-          </h2>
-          <p className="font-body-md text-body-md text-on-surface-variant mb-4">
-            Book appointments with our top-rated medical professionals.
-          </p>
+          <PageHeader
+            title="Find a Specialist"
+            subtitle="Book appointments with our top-rated medical professionals."
+            as="h2"
+            className="mb-4"
+          />
 
           {/* Search Input Bar */}
           <div className="relative max-w-2xl">
@@ -70,20 +72,11 @@ export function FindDoctorPage() {
         {/* Specialty Filter Chips (Horizontal scrollable) */}
         <section className="overflow-x-auto no-scrollbar pb-1">
           <div className="flex gap-2 min-w-max">
-            <button
-              type="button"
+            <FilterChip
+              label="All Specialties"
+              isSelected={selectedSpecialty === null}
               onClick={() => setSelectedSpecialty(null)}
-              className={`
-                px-4 py-2 rounded-full font-label-lg text-label-lg transition-all select-none shrink-0
-                ${
-                  selectedSpecialty === null
-                    ? 'bg-primary text-on-primary font-semibold shadow-sm'
-                    : 'bg-surface-container-lowest border border-outline-variant text-on-surface hover:bg-surface-container'
-                }
-              `}
-            >
-              All Specialties
-            </button>
+            />
 
             {MOCK_SPECIALTIES.map((spec) => (
               <SpecialtyChip
