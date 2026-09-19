@@ -9,7 +9,9 @@
     "dev": "nodemon src/server.js",
     "db:setup": "node src/scripts/setupDatabase.js",
     "db:migrate": "node src/scripts/migrate.js",
-    "test:auth": "node src/scripts/testAuth.js"
+    "test:auth": "node src/scripts/testAuth.js",
+    "test:profile": "node src/scripts/testPatientProfile.js",
+    "test": "node src/scripts/testAuth.js && node src/scripts/testPatientProfile.js"
   },
   "keywords": [
     "express",

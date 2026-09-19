@@ -1,41 +1,78 @@
-import { MOCK_PATIENT } from '../data/mockPatient';
+import { authService } from './authService';
 import { MOCK_VISITS } from '../data/mockVisits';
 
-let patientState = { ...MOCK_PATIENT };
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 let visitsState = [...MOCK_VISITS];
 
 /**
  * Patient Service
- * Manages patient demographic, vitals, medical records, and onboarding information.
+ * Coordinates patient demographic and medical profile requests with the backend API.
  */
 export const patientService = {
   /**
-   * Get active patient profile
-   * @returns {Promise<Object>}
+   * Retrieves the authenticated patient's profile from the backend.
+   * @returns {Promise<Object|null>}
    */
   async getProfile() {
-    return new Promise((resolve) => {
-      setTimeout(() => resolve({ ...patientState }), 100);
+    const token = authService.getToken();
+    if (!token) {
+      return null;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/patients/profile`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
     });
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        return null;
+      }
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Failed to fetch patient profile (${response.status})`);
+    }
+
+    const payload = await response.json();
+    return payload.data?.profile || null;
   },
 
   /**
-   * Update patient profile information
-   * @param {Object} updates 
+   * Updates the authenticated patient's profile details.
+   * @param {Object} updates
    * @returns {Promise<Object>}
    */
   async updateProfile(updates) {
-    return new Promise((resolve) => {
-      patientState = {
-        ...patientState,
-        ...updates,
-      };
-      setTimeout(() => resolve({ ...patientState }), 150);
+    const token = authService.getToken();
+    if (!token) {
+      throw new Error('Authentication required to update profile.');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/patients/profile`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
     });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      if (errorData.errors && Array.isArray(errorData.errors) && errorData.errors.length > 0) {
+        throw new Error(errorData.errors.map((e) => e.message).join(' '));
+      }
+      throw new Error(errorData.message || `Failed to update profile (${response.status})`);
+    }
+
+    const payload = await response.json();
+    return payload.data?.profile;
   },
 
   /**
-   * Get past visits and medical records
+   * Get past visits and medical records (mock for current phase)
    * @returns {Promise<Array>}
    */
   async getPastVisits() {

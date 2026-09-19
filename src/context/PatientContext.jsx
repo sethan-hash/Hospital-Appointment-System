@@ -1,17 +1,28 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { patientService } from '../services/patientService';
 import { appointmentService } from '../services/appointmentService';
+import { useAuth } from '../hooks/useAuth';
 
 const PatientContext = createContext(null);
 
 export function PatientProvider({ children }) {
+  const { isAuthenticated, role } = useAuth();
   const [profile, setProfile] = useState(null);
   const [upcomingAppointment, setUpcomingAppointment] = useState(null);
   const [allAppointments, setAllAppointments] = useState([]);
   const [pastVisits, setPastVisits] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
+    if (!isAuthenticated || role !== 'PATIENT') {
+      setProfile(null);
+      setUpcomingAppointment(null);
+      setAllAppointments([]);
+      setPastVisits([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const [fetchedProfile, fetchedUpcoming, fetchedAllApts, fetchedVisits] =
@@ -31,11 +42,17 @@ export function PatientProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAuthenticated, role]);
 
   useEffect(() => {
     refreshData();
-  }, []);
+  }, [refreshData]);
+
+  const updateProfile = async (updates) => {
+    const updated = await patientService.updateProfile(updates);
+    setProfile(updated);
+    return updated;
+  };
 
   const bookNewAppointment = async (appointmentData) => {
     const newApt = await appointmentService.bookAppointment(appointmentData);
@@ -58,6 +75,7 @@ export function PatientProvider({ children }) {
         pastVisits,
         loading,
         refreshData,
+        updateProfile,
         bookNewAppointment,
         rescheduleAppointment,
       }}
