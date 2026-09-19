@@ -7,9 +7,9 @@ import { getAppointmentDateParts } from '../../utils/dateUtils';
 
 /**
  * Upcoming Appointment Bento Card Component
- * Replicates the Stitch Dashboard appointment card with decorative blob, calendar date badge, doctor details, and reschedule button.
+ * Replicates the Stitch Dashboard appointment card with decorative blob, calendar date badge, doctor details, and action buttons.
  */
-export function AppointmentCard({ appointment, onRescheduleClick }) {
+export function AppointmentCard({ appointment, onRescheduleClick, onCancelClick }) {
   if (!appointment) return null;
 
   const dateParts = getAppointmentDateParts(appointment.date);
@@ -48,11 +48,27 @@ export function AppointmentCard({ appointment, onRescheduleClick }) {
             <p className="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1 mt-1">
               <Icon name="stethoscope" className="text-[16px]" /> {appointment.department}
             </p>
+            {appointment.location && (
+              <p className="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1 mt-0.5 text-xs">
+                <Icon name="location_on" className="text-[14px] text-primary" /> {appointment.location}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Action Button */}
-        <div className="flex flex-col sm:flex-row gap-sm md:w-auto w-full mt-4 md:mt-0">
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-2 md:w-auto w-full mt-4 md:mt-0">
+          {onCancelClick && (
+            <Button
+              variant="outline"
+              size="md"
+              iconLeading="cancel"
+              onClick={onCancelClick}
+              className="px-4 py-3 min-h-[52px] text-error hover:bg-error-container/20 hover:border-error/50"
+            >
+              Cancel
+            </Button>
+          )}
           <Button
             variant="primary"
             size="md"

@@ -90,48 +90,21 @@ function normalizeAppointment(row) {
     location: row.location || null,
     reason: row.reason_for_visit || null,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
 /**
- * Books a new appointment for an authenticated patient.
+ * Validates a requested appointment date and time against a doctor's active weekly schedule.
+ * Shared between booking and rescheduling to guarantee identical schedule validation.
  *
- * Booking validation sequence:
- *  1. Resolve patient_id from the JWT user id.
- *  2. Verify doctor exists and is active.
- *  3. Validate appointment date (not past).
- *  4. Determine weekday of requested date.
- *  5. Find an active doctor_schedules row for that doctor + weekday.
- *  6. Validate start time is within schedule window.
- *  7. Validate start time aligns with slot_duration_minutes boundaries.
- *  8. Compute end_time (start + slot_duration).
- *  9. Acquire application named lock (GET_LOCK) to serialize concurrent bookings.
- * 10. Start transaction, check for overlapping SCHEDULED appointment (FOR UPDATE).
- * 11. Insert appointment into MySQL.
- * 12. Commit transaction and release named lock.
- *
- * @param {object} params
- * @param {number} params.userId          - JWT user id (never client-supplied patient id)
- * @param {number} params.doctorId
- * @param {string} params.appointmentDate - "YYYY-MM-DD"
- * @param {string} params.startTime       - "HH:MM" or "H:MM AM/PM"
- * @param {string} [params.reason]
- * @returns {Promise<object>} Normalized created appointment
+ * @param {number} doctorId
+ * @param {string} appointmentDate - "YYYY-MM-DD"
+ * @param {string} startTime       - "HH:MM" or "H:MM AM/PM"
+ * @returns {Promise<{ doctor: object, sched: object, reqStartMins: number, startTimeStr: string }>}
  */
-export async function bookAppointment({ userId, doctorId, appointmentDate, startTime, reason }) {
-  // ── Step 1: Resolve patient record from JWT user id ──────────────────────
-  const [patientRows] = await pool.query(
-    'SELECT id FROM patients WHERE user_id = ? LIMIT 1;',
-    [userId]
-  );
-  if (patientRows.length === 0) {
-    const err = new Error('Patient record not found for this account.');
-    err.statusCode = 404;
-    throw err;
-  }
-  const patientId = patientRows[0].id;
-
-  // ── Step 2: Verify doctor ─────────────────────────────────────────────────
+async function validateSlotAgainstDoctorSchedule(doctorId, appointmentDate, startTime) {
+  // 1. Verify doctor exists and is active
   const [doctorRows] = await pool.query(
     `SELECT d.id, d.hospital_name, d.specialization,
             u.full_name, u.status
@@ -148,7 +121,7 @@ export async function bookAppointment({ userId, doctorId, appointmentDate, start
   }
   const doctor = doctorRows[0];
 
-  // ── Step 3: Date not in the past ─────────────────────────────────────────
+  // 2. Validate date not in the past
   const [y, m, d] = appointmentDate.split('-').map(Number);
   const requestedDate = new Date(y, m - 1, d);
   const today = new Date();
@@ -160,10 +133,10 @@ export async function bookAppointment({ userId, doctorId, appointmentDate, start
     throw err;
   }
 
-  // ── Step 4: Determine weekday ─────────────────────────────────────────────
-  const dayEnum = JS_DAY_TO_ENUM[requestedDate.getDay()]; // e.g. "MONDAY"
+  // 3. Determine weekday
+  const dayEnum = JS_DAY_TO_ENUM[requestedDate.getDay()];
 
-  // ── Step 5: Find active schedule for this doctor + weekday ────────────────
+  // 4. Find active schedule for this doctor + weekday
   const [scheduleRows] = await pool.query(
     `SELECT start_time, end_time, slot_duration_minutes
      FROM doctor_schedules
@@ -184,7 +157,7 @@ export async function bookAppointment({ userId, doctorId, appointmentDate, start
   const schedEndMins   = timeToMinutes(sched.end_time);
   const slotDurMins    = sched.slot_duration_minutes;
 
-  // ── Step 6: Validate start time within window ─────────────────────────────
+  // 5. Validate start time within window
   const reqStartMins = hmToMinutes(startTime);
   const reqEndMins   = reqStartMins + slotDurMins;
 
@@ -196,7 +169,7 @@ export async function bookAppointment({ userId, doctorId, appointmentDate, start
     throw err;
   }
 
-  // ── Step 7: Validate slot alignment ──────────────────────────────────────
+  // 6. Validate slot alignment
   const offsetFromStart = reqStartMins - schedStartMins;
   if (offsetFromStart % slotDurMins !== 0) {
     const err = new Error(
@@ -206,16 +179,41 @@ export async function bookAppointment({ userId, doctorId, appointmentDate, start
     throw err;
   }
 
-  // ── Step 8: Compute MySQL-ready time strings ──────────────────────────────
-  const startTimeStr = minutesToTimeStr(reqStartMins);   // "HH:MM:00"
+  const startTimeStr = minutesToTimeStr(reqStartMins); // "HH:MM:00"
 
-  // ── Step 9 & 10: Concurrency lock + Transaction with row-level check ───────
+  return { doctor, sched, reqStartMins, startTimeStr };
+}
+
+/**
+ * Resolves patient record ID from authenticated JWT user ID.
+ * @param {number} userId
+ * @returns {Promise<number>} patientId
+ */
+async function resolvePatientId(userId) {
+  const [patientRows] = await pool.query(
+    'SELECT id FROM patients WHERE user_id = ? LIMIT 1;',
+    [userId]
+  );
+  if (patientRows.length === 0) {
+    const err = new Error('Patient record not found for this account.');
+    err.statusCode = 404;
+    throw err;
+  }
+  return patientRows[0].id;
+}
+
+/**
+ * Books a new appointment for an authenticated patient.
+ */
+export async function bookAppointment({ userId, doctorId, appointmentDate, startTime, reason }) {
+  const patientId = await resolvePatientId(userId);
+  const { startTimeStr } = await validateSlotAgainstDoctorSchedule(doctorId, appointmentDate, startTime);
+
   const lockKey = `medlink_apt_${doctorId}_${appointmentDate}_${startTimeStr}`;
   const connection = await pool.getConnection();
   let lockAcquired = false;
 
   try {
-    // Application-level named lock serialized per doctor/date/time across all connections
     const [lockRows] = await connection.query('SELECT GET_LOCK(?, 10) AS acquired;', [lockKey]);
     if (lockRows[0]?.acquired === 1) {
       lockAcquired = true;
@@ -223,7 +221,6 @@ export async function bookAppointment({ userId, doctorId, appointmentDate, start
 
     await connection.beginTransaction();
 
-    // Check for existing active (SCHEDULED) appointment for this slot
     const [conflictRows] = await connection.query(
       `SELECT id FROM appointments
        WHERE doctor_id = ?
@@ -237,14 +234,11 @@ export async function bookAppointment({ userId, doctorId, appointmentDate, start
 
     if (conflictRows.length > 0) {
       await connection.rollback();
-      const err = new Error(
-        'This time slot is already booked. Please choose a different time.'
-      );
+      const err = new Error('This time slot is already booked. Please choose a different time.');
       err.statusCode = 409;
       throw err;
     }
 
-    // Insert the new appointment
     const [insertResult] = await connection.query(
       `INSERT INTO appointments
          (patient_id, doctor_id, appointment_date, appointment_time, status, type, reason_for_visit)
@@ -254,7 +248,6 @@ export async function bookAppointment({ userId, doctorId, appointmentDate, start
 
     await connection.commit();
 
-    // Fetch the created record with safe date formatting
     const [created] = await pool.query(
       `SELECT
          a.id,
@@ -293,4 +286,238 @@ export async function bookAppointment({ userId, doctorId, appointmentDate, start
     }
     connection.release();
   }
+}
+
+/**
+ * Retrieves all upcoming scheduled appointments for the authenticated patient.
+ * Sorted chronologically: earliest upcoming appointment first.
+ *
+ * @param {number} userId - JWT user id
+ * @returns {Promise<object[]>}
+ */
+export async function getUpcomingAppointments(userId) {
+  const patientId = await resolvePatientId(userId);
+
+  // Use local calendar date to prevent UTC shift
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${y}-${m}-${d}`;
+
+  const [rows] = await pool.query(
+    `SELECT
+       a.id,
+       a.patient_id,
+       a.doctor_id,
+       DATE_FORMAT(a.appointment_date, '%Y-%m-%d') AS appointment_date,
+       a.appointment_time,
+       a.status,
+       a.type,
+       a.reason_for_visit,
+       a.created_at,
+       a.updated_at,
+       u.full_name      AS doctor_name,
+       d.specialization AS doctor_title,
+       d.hospital_name  AS location
+     FROM appointments a
+     INNER JOIN doctors d ON d.id = a.doctor_id
+     INNER JOIN users u ON u.id = d.user_id
+     WHERE a.patient_id = ?
+       AND a.status = 'SCHEDULED'
+       AND a.appointment_date >= ?
+     ORDER BY a.appointment_date ASC, a.appointment_time ASC;`,
+    [patientId, todayStr]
+  );
+
+  return rows.map(normalizeAppointment);
+}
+
+/**
+ * Reschedules an existing scheduled appointment to a new date and time slot.
+ * Ensures appointment ownership, schedule validity, and concurrency protection.
+ *
+ * @param {object} params
+ * @param {number} params.userId
+ * @param {number} params.appointmentId
+ * @param {string} params.appointmentDate
+ * @param {string} params.startTime
+ * @returns {Promise<object>}
+ */
+export async function rescheduleAppointment({ userId, appointmentId, appointmentDate, startTime }) {
+  const patientId = await resolvePatientId(userId);
+
+  // Verify appointment exists and belongs to authenticated patient
+  const [aptRows] = await pool.query(
+    'SELECT * FROM appointments WHERE id = ? LIMIT 1;',
+    [appointmentId]
+  );
+
+  if (aptRows.length === 0 || aptRows[0].patient_id !== patientId) {
+    const err = new Error('Appointment not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const existingApt = aptRows[0];
+
+  // Only SCHEDULED appointments can be rescheduled
+  if (existingApt.status !== 'SCHEDULED') {
+    const err = new Error('Only scheduled appointments can be rescheduled.');
+    err.statusCode = 409;
+    throw err;
+  }
+
+  // Validate destination slot against doctor's weekly schedule
+  const { startTimeStr } = await validateSlotAgainstDoctorSchedule(
+    existingApt.doctor_id,
+    appointmentDate,
+    startTime
+  );
+
+  // Concurrency lock + Transaction check on the destination slot
+  const lockKey = `medlink_apt_${existingApt.doctor_id}_${appointmentDate}_${startTimeStr}`;
+  const connection = await pool.getConnection();
+  let lockAcquired = false;
+
+  try {
+    const [lockRows] = await connection.query('SELECT GET_LOCK(?, 10) AS acquired;', [lockKey]);
+    if (lockRows[0]?.acquired === 1) {
+      lockAcquired = true;
+    }
+
+    await connection.beginTransaction();
+
+    // Check conflict on destination slot excluding the current appointment
+    const [conflictRows] = await connection.query(
+      `SELECT id FROM appointments
+       WHERE doctor_id = ?
+         AND appointment_date = ?
+         AND appointment_time = ?
+         AND status IN (${BLOCKING_STATUSES.map(() => '?').join(',')})
+         AND id != ?
+       LIMIT 1
+       FOR UPDATE;`,
+      [existingApt.doctor_id, appointmentDate, startTimeStr, ...BLOCKING_STATUSES, appointmentId]
+    );
+
+    if (conflictRows.length > 0) {
+      await connection.rollback();
+      const err = new Error('This time slot is already booked. Please choose a different time.');
+      err.statusCode = 409;
+      throw err;
+    }
+
+    // Update appointment date and time
+    await connection.query(
+      `UPDATE appointments
+       SET appointment_date = ?, appointment_time = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?;`,
+      [appointmentDate, startTimeStr, appointmentId]
+    );
+
+    await connection.commit();
+
+    // Fetch and return the updated appointment
+    const [updatedRows] = await pool.query(
+      `SELECT
+         a.id,
+         a.patient_id,
+         a.doctor_id,
+         DATE_FORMAT(a.appointment_date, '%Y-%m-%d') AS appointment_date,
+         a.appointment_time,
+         a.status,
+         a.type,
+         a.reason_for_visit,
+         a.created_at,
+         a.updated_at,
+         u.full_name      AS doctor_name,
+         d.specialization AS doctor_title,
+         d.hospital_name  AS location
+       FROM appointments a
+       INNER JOIN doctors d ON d.id = a.doctor_id
+       INNER JOIN users u ON u.id = d.user_id
+       WHERE a.id = ?
+       LIMIT 1;`,
+      [appointmentId]
+    );
+
+    return normalizeAppointment(updatedRows[0]);
+
+  } catch (err) {
+    if (connection) {
+      try { await connection.rollback(); } catch { /* ignore rollback error */ }
+    }
+    throw err;
+  } finally {
+    if (lockAcquired) {
+      try {
+        await connection.query('SELECT RELEASE_LOCK(?);', [lockKey]);
+      } catch { /* ignore release error */ }
+    }
+    connection.release();
+  }
+}
+
+/**
+ * Cancels an existing scheduled appointment for the authenticated patient.
+ *
+ * @param {object} params
+ * @param {number} params.userId
+ * @param {number} params.appointmentId
+ * @returns {Promise<object>}
+ */
+export async function cancelAppointment({ userId, appointmentId }) {
+  const patientId = await resolvePatientId(userId);
+
+  const [aptRows] = await pool.query(
+    'SELECT * FROM appointments WHERE id = ? LIMIT 1;',
+    [appointmentId]
+  );
+
+  if (aptRows.length === 0 || aptRows[0].patient_id !== patientId) {
+    const err = new Error('Appointment not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const existingApt = aptRows[0];
+
+  if (existingApt.status !== 'SCHEDULED') {
+    const err = new Error('Only scheduled appointments can be cancelled.');
+    err.statusCode = 409;
+    throw err;
+  }
+
+  await pool.query(
+    `UPDATE appointments
+     SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?;`,
+    [appointmentId]
+  );
+
+  const [updatedRows] = await pool.query(
+    `SELECT
+       a.id,
+       a.patient_id,
+       a.doctor_id,
+       DATE_FORMAT(a.appointment_date, '%Y-%m-%d') AS appointment_date,
+       a.appointment_time,
+       a.status,
+       a.type,
+       a.reason_for_visit,
+       a.created_at,
+       a.updated_at,
+       u.full_name      AS doctor_name,
+       d.specialization AS doctor_title,
+       d.hospital_name  AS location
+     FROM appointments a
+     INNER JOIN doctors d ON d.id = a.doctor_id
+     INNER JOIN users u ON u.id = d.user_id
+     WHERE a.id = ?
+     LIMIT 1;`,
+    [appointmentId]
+  );
+
+  return normalizeAppointment(updatedRows[0]);
 }

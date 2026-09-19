@@ -14,7 +14,8 @@
     "test:doctors": "node src/scripts/testDoctorSearch.js",
     "test:details": "node src/scripts/testDoctorDetails.js",
     "test:appointments": "node src/scripts/testAppointmentBooking.js",
-    "test": "node src/scripts/testAuth.js && node src/scripts/testPatientProfile.js && node src/scripts/testDoctorSearch.js && node src/scripts/testDoctorDetails.js && node src/scripts/testAppointmentBooking.js"
+    "test:management": "node src/scripts/testAppointmentManagement.js",
+    "test": "node src/scripts/testAuth.js && node src/scripts/testPatientProfile.js && node src/scripts/testDoctorSearch.js && node src/scripts/testDoctorDetails.js && node src/scripts/testAppointmentBooking.js && node src/scripts/testAppointmentManagement.js"
   },
   "keywords": [
     "express",

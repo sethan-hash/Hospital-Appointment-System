@@ -66,6 +66,12 @@ export function PatientProvider({ children }) {
     return updated;
   };
 
+  const cancelAppointment = async (id) => {
+    const cancelled = await appointmentService.cancelAppointment(id);
+    await refreshData();
+    return cancelled;
+  };
+
   return (
     <PatientContext.Provider
       value={{
@@ -78,6 +84,7 @@ export function PatientProvider({ children }) {
         updateProfile,
         bookNewAppointment,
         rescheduleAppointment,
+        cancelAppointment,
       }}
     >
       {children}

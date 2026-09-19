@@ -6,6 +6,7 @@ export function useAppointments() {
     allAppointments,
     bookNewAppointment,
     rescheduleAppointment,
+    cancelAppointment,
     loading,
     refreshData,
   } = usePatient();
@@ -15,6 +16,7 @@ export function useAppointments() {
     allAppointments,
     bookNewAppointment,
     rescheduleAppointment,
+    cancelAppointment,
     loading,
     refreshData,
   };

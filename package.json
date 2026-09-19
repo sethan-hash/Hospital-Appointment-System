@@ -12,7 +12,8 @@
     "test:profile": "node backend/src/scripts/testPatientProfile.js",
     "test:doctors": "node backend/src/scripts/testDoctorSearch.js",
     "test:details": "node backend/src/scripts/testDoctorDetails.js",
-    "test:appointments": "node backend/src/scripts/testAppointmentBooking.js"
+    "test:appointments": "node backend/src/scripts/testAppointmentBooking.js",
+    "test:management": "node backend/src/scripts/testAppointmentManagement.js"
   },
   "dependencies": {
     "react": "^19.2.8",
