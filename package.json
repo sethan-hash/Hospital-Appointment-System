@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test:auth": "node backend/src/scripts/testAuth.js",
     "test:profile": "node backend/src/scripts/testPatientProfile.js",
-    "test:doctors": "node backend/src/scripts/testDoctorSearch.js"
+    "test:doctors": "node backend/src/scripts/testDoctorSearch.js",
+    "test:details": "node backend/src/scripts/testDoctorDetails.js"
   },
   "dependencies": {
     "react": "^19.2.8",

@@ -7,12 +7,14 @@ import { Badge } from '../../components/common/Badge';
 import { Icon } from '../../components/common/Icon';
 import { RatingStars } from '../../components/common/RatingStars';
 import { useDoctor } from '../../hooks/useDoctor';
+import { useDoctorAvailability } from '../../hooks/useDoctorAvailability';
 import { formatRating } from '../../utils/formatters';
 
 export function DoctorProfilePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { doctor, loading } = useDoctor(id);
+  const { schedule, loading: scheduleLoading, error: scheduleError } = useDoctorAvailability(id);
 
   if (loading) {
     return (
@@ -43,11 +45,20 @@ export function DoctorProfilePage() {
         {/* Profile Header & Bio Section */}
         <Card className="p-6 md:p-8 flex flex-col md:flex-row gap-6 md:gap-8 items-start">
           <div className="flex-shrink-0 flex flex-col items-center gap-4 w-full md:w-auto">
-            <img
-              src={doctor.image}
-              alt={doctor.name}
-              className="w-32 h-32 rounded-full object-cover shadow-sm border-2 border-surface-container"
-            />
+            {/* Doctor Avatar — null-safe: DB doctors have no stored photo */}
+            <div className="w-32 h-32 rounded-full overflow-hidden bg-surface-container flex items-center justify-center shadow-sm border-2 border-surface-container">
+              {doctor.image ? (
+                <img
+                  src={doctor.image}
+                  alt={doctor.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="material-symbols-rounded text-[56px] text-on-surface-variant select-none">
+                  person
+                </span>
+              )}
+            </div>
             <Link to={`/patient/book/${doctor.id}`} className="w-full">
               <Button
                 variant="primary"
@@ -125,36 +136,52 @@ export function DoctorProfilePage() {
               </span>
             </div>
 
+            {/* Office Hours rows */}
             <div className="space-y-2.5">
-              {doctor.schedule?.map((item) => (
-                <div
-                  key={item.day}
-                  className={`
-                    flex items-center justify-between p-3.5 rounded-lg border transition-colors
-                    ${
-                      item.available
-                        ? 'bg-surface-container-low border-transparent'
-                        : 'bg-surface border-transparent opacity-60'
-                    }
-                  `}
-                >
-                  <span className="font-body-md text-on-surface font-medium w-24">
-                    {item.day}
-                  </span>
-                  <span
-                    className={`text-body-sm ${
-                      item.available ? 'text-on-surface-variant' : 'text-outline font-medium'
-                    }`}
-                  >
-                    {item.hours}
-                  </span>
-                  <span
-                    className={`w-2.5 h-2.5 rounded-full ${
-                      item.available ? 'bg-[#2e7d32]' : 'bg-outline-variant'
-                    }`}
-                  />
+              {scheduleLoading ? (
+                <div className="flex items-center justify-center py-6 text-primary">
+                  <Icon name="progress_activity" className="animate-spin text-2xl mr-2" />
+                  <span className="font-body-md">Loading schedule...</span>
                 </div>
-              ))}
+              ) : scheduleError ? (
+                <p className="text-body-sm text-error text-center py-4">
+                  Could not load schedule. Please try again.
+                </p>
+              ) : schedule.length === 0 ? (
+                <p className="text-body-sm text-on-surface-variant text-center py-4">
+                  No schedule available for this doctor.
+                </p>
+              ) : (
+                schedule.map((item) => (
+                  <div
+                    key={item.day}
+                    className={`
+                      flex items-center justify-between p-3.5 rounded-lg border transition-colors
+                      ${
+                        item.available
+                          ? 'bg-surface-container-low border-transparent'
+                          : 'bg-surface border-transparent opacity-60'
+                      }
+                    `}
+                  >
+                    <span className="font-body-md text-on-surface font-medium w-24">
+                      {item.day}
+                    </span>
+                    <span
+                      className={`text-body-sm ${
+                        item.available ? 'text-on-surface-variant' : 'text-outline font-medium'
+                      }`}
+                    >
+                      {item.hours}
+                    </span>
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full ${
+                        item.available ? 'bg-[#2e7d32]' : 'bg-outline-variant'
+                      }`}
+                    />
+                  </div>
+                ))
+              )}
             </div>
           </Card>
 

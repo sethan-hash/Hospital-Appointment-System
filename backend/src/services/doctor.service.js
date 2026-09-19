@@ -37,20 +37,24 @@ function normalizeDoctorRow(row) {
     userId: row.userId,
     // DoctorCard reads: name, title, location, rating, image
     name: row.name,
-    title: row.specialization,           // displayed as subtitle (e.g. "Cardiology")
+    title: row.specialization,            // subtitle in DoctorCard (e.g. "Cardiology")
     department: `${row.department} Dept.`,
     specialtyId: row.specialization.toLowerCase(), // matches MOCK_SPECIALTIES id values
     location: row.location,
+    // DoctorProfilePage reads 'education' and 'clinicName' — map from DB columns
     qualification: row.qualification,
+    education: row.qualification,         // alias: DoctorProfilePage uses doctor.education
+    clinicName: row.location,             // alias: DoctorProfilePage uses doctor.clinicName
     consultationFee: parseFloat(row.consultationFee),
     experience: `${row.experienceYears}+ Years Exp`,
     experienceYears: row.experienceYears,
     bio: row.bio || '',
     isAvailable: Boolean(row.isAvailable),
-    // rating: DB has no rating column; default shown in card until reviews are added
+    // rating/reviews: no DB columns yet — defaults shown until reviews feature is built
     rating: 4.8,
     reviewCount: 0,
-    // image: DB has no image column; frontend uses a default placeholder avatar
+    reviews: [],
+    // image: no DB column — DoctorCard/DoctorProfilePage handle null with a placeholder
     image: null,
   };
 }
@@ -108,4 +112,95 @@ export async function getDoctorById(doctorId) {
   }
 
   return normalizeDoctorRow(rows[0]);
+}
+
+/**
+ * Day ordering for display — Monday first, Sunday last.
+ * Matches the order used on the DoctorProfilePage Office Hours section.
+ */
+const DAY_ORDER = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+
+/**
+ * Formats a TIME column value (HH:MM:SS or HH:MM) into 12-hour display (e.g. "9:00 AM").
+ * @param {string} t
+ * @returns {string}
+ */
+function formatTime(t) {
+  if (!t) return '';
+  const [hStr, mStr] = String(t).split(':');
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
+/**
+ * Capitalises only the first letter of a day name (e.g. "MONDAY" -> "Monday").
+ * @param {string} day
+ * @returns {string}
+ */
+function formatDay(day) {
+  if (!day) return '';
+  return day.charAt(0) + day.slice(1).toLowerCase();
+}
+
+/**
+ * Retrieves the weekly schedule for a doctor from doctor_schedules.
+ * Returns schedule rows in Monday-first order.
+ * Only active rows (is_active = 1) are returned.
+ *
+ * Shape returned matches DoctorProfilePage's doctor.schedule expectation:
+ *   { day: string, hours: string, available: boolean }
+ *
+ * @param {number|string} doctorId
+ * @returns {Promise<{ schedule: object[], doctorExists: boolean }>}
+ */
+export async function getDoctorAvailability(doctorId) {
+  // Verify the doctor exists first
+  const doctor = await getDoctorById(doctorId);
+  if (!doctor) {
+    return { doctorExists: false, schedule: [] };
+  }
+
+  const [rows] = await pool.query(
+    `SELECT
+       day_of_week,
+       start_time,
+       end_time,
+       slot_duration_minutes,
+       is_active
+     FROM doctor_schedules
+     WHERE doctor_id = ?
+       AND is_active = 1
+     ORDER BY FIELD(day_of_week,
+       'MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY'
+     );`,
+    [doctorId]
+  );
+
+  // Build a full 7-day display — days with no row show as unavailable
+  const scheduledDays = new Map(
+    rows.map((r) => [r.day_of_week, r])
+  );
+
+  const schedule = DAY_ORDER.map((dayKey) => {
+    const row = scheduledDays.get(dayKey);
+    if (row) {
+      return {
+        day: formatDay(dayKey),
+        hours: `${formatTime(row.start_time)} - ${formatTime(row.end_time)}`,
+        available: true,
+        slotDurationMinutes: row.slot_duration_minutes,
+      };
+    }
+    return {
+      day: formatDay(dayKey),
+      hours: 'Unavailable',
+      available: false,
+      slotDurationMinutes: null,
+    };
+  });
+
+  return { doctorExists: true, schedule };
 }

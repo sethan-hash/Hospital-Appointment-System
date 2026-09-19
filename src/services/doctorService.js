@@ -84,4 +84,36 @@ export const doctorService = {
     const payload = await response.json();
     return payload.data?.doctor || null;
   },
+
+  /**
+   * Retrieves the weekly availability schedule for a doctor.
+   * Maps to GET /api/doctors/:id/availability
+   *
+   * @param {string|number} id
+   * @returns {Promise<object[]>} Array of { day, hours, available, slotDurationMinutes }
+   */
+  async getDoctorAvailability(id) {
+    const token = authService.getToken();
+    if (!token) {
+      return [];
+    }
+
+    const response = await fetch(`${API_BASE_URL}/doctors/${id}/availability`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) return [];
+      if (response.status === 401 || response.status === 403) return [];
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Failed to fetch availability (${response.status})`);
+    }
+
+    const payload = await response.json();
+    return payload.data?.schedule || [];
+  },
 };

@@ -44,3 +44,28 @@ export async function getDoctorById(req, res, next) {
     next(error);
   }
 }
+
+/**
+ * Retrieves the weekly availability schedule for a doctor.
+ * GET /api/doctors/:id/availability
+ */
+export async function getAvailability(req, res, next) {
+  try {
+    const doctorId = req.params.id;
+    const result = await doctorService.getDoctorAvailability(doctorId);
+
+    if (!result.doctorExists) {
+      return res.status(404).json({
+        success: false,
+        message: 'Doctor not found.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: { schedule: result.schedule },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
