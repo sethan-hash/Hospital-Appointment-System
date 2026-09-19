@@ -13,18 +13,18 @@ import { BLOOD_TYPES } from '../../utils/constants';
 
 export function HealthProfilePage() {
   const navigate = useNavigate();
-  const { registrationDraft, updateRegistrationDraft, completeRegistration } =
+  const { registrationDraft, updateRegistrationDraft, register, resetRegistrationDraft } =
     useAuth();
 
   const [formData, setFormData] = useState({
     bloodType: registrationDraft.bloodType || 'O+',
-    allergies: registrationDraft.allergies || 'Penicillin',
-    chronicConditions:
-      registrationDraft.chronicConditions || 'Mild seasonal allergies',
+    allergies: registrationDraft.allergies || '',
+    chronicConditions: registrationDraft.chronicConditions || '',
     insuranceFileName: null,
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
@@ -36,9 +36,10 @@ export function HealthProfilePage() {
     }
   };
 
-  const handleCompleteSubmit = (e) => {
+  const handleCompleteSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setError(null);
 
     updateRegistrationDraft({
       bloodType: formData.bloodType,
@@ -46,11 +47,28 @@ export function HealthProfilePage() {
       chronicConditions: formData.chronicConditions,
     });
 
-    setTimeout(() => {
-      completeRegistration();
-      setIsSubmitting(false);
+    const fullPayload = {
+      fullName: registrationDraft.fullName,
+      email: registrationDraft.email,
+      password: registrationDraft.password,
+      phone: registrationDraft.phone,
+      dob: registrationDraft.dob,
+      gender: registrationDraft.gender,
+      bloodType: formData.bloodType,
+      allergies: formData.allergies,
+      chronicConditions: formData.chronicConditions,
+      emergencyContact: registrationDraft.emergencyContact,
+    };
+
+    try {
+      await register(fullPayload);
+      if (resetRegistrationDraft) resetRegistrationDraft();
       navigate('/onboarding/complete');
-    }, 400);
+    } catch (err) {
+      setError(err.message || 'Registration failed. Please review your details and try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -77,6 +95,13 @@ export function HealthProfilePage() {
           </div>
 
           <form onSubmit={handleCompleteSubmit} className="space-y-6">
+            {error && (
+              <div className="bg-error-container/20 border border-error/40 text-error text-body-sm rounded-xl p-3.5 flex items-center gap-2">
+                <Icon name="error" className="text-xl shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Blood Type */}
               <Select

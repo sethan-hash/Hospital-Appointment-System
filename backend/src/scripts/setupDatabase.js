@@ -49,6 +49,15 @@ async function verifyTablesAndRows(connection) {
       console.error(`  ✗ Missing table: '${tableName}'`);
     }
   }
+
+  // Verify users table contains password_hash column
+  const [cols] = await connection.query('DESCRIBE users;');
+  const hasPasswordHash = cols.some((c) => c.Field === 'password_hash');
+  if (hasPasswordHash) {
+    console.log('  ✓ users.password_hash column verified.');
+  } else {
+    console.error('  ✗ users.password_hash column MISSING.');
+  }
 }
 
 async function setupDatabase() {

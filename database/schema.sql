@@ -14,7 +14,6 @@ USE `medlink_care`;
 -- ----------------------------------------------------------------------------
 -- 1. Table: users
 -- Core authentication and platform identity table.
--- Note: Passwords are omitted in this phase as authentication is not yet implemented.
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `users` (
   `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -22,6 +21,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `full_name` VARCHAR(100) NOT NULL,
   `email` VARCHAR(150) NOT NULL UNIQUE,
   `phone` VARCHAR(20) NOT NULL UNIQUE,
+  `password_hash` VARCHAR(255) NOT NULL,
   `status` ENUM('ACTIVE', 'INACTIVE', 'SUSPENDED') NOT NULL DEFAULT 'ACTIVE',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS `patients` (
   `pincode` VARCHAR(10) NULL,
   `emergency_contact_name` VARCHAR(100) NULL,
   `emergency_contact_phone` VARCHAR(20) NULL,
+  `allergies` TEXT NULL,
+  `chronic_conditions` TEXT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT `fk_patients_user`

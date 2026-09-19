@@ -23,19 +23,20 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- ----------------------------------------------------------------------------
 -- 1. Seed: users
 -- 4 Doctors, 5 Patients, 1 Receptionist, 1 Admin
+-- Default password for all seed accounts: Password123!
 -- ----------------------------------------------------------------------------
-INSERT INTO `users` (`id`, `role`, `full_name`, `email`, `phone`, `status`) VALUES
-(1, 'DOCTOR', 'Dr. Priya Sharma', 'priya.sharma@apollohospitals.com', '+91 98450 12345', 'ACTIVE'),
-(2, 'DOCTOR', 'Dr. Rajesh Kulkarni', 'rajesh.kulkarni@apollohospitals.com', '+91 98450 23456', 'ACTIVE'),
-(3, 'DOCTOR', 'Dr. Ananya Iyer', 'ananya.iyer@apollohospitals.com', '+91 98450 34567', 'ACTIVE'),
-(4, 'DOCTOR', 'Dr. Vikram Venkatesh', 'vikram.venkatesh@apollohospitals.com', '+91 98450 45678', 'ACTIVE'),
-(5, 'PATIENT', 'Rahul Verma', 'rahul.verma@example.in', '+91 99001 11223', 'ACTIVE'),
-(6, 'PATIENT', 'Sneha Patel', 'sneha.patel@example.in', '+91 99002 22334', 'ACTIVE'),
-(7, 'PATIENT', 'Amit Sundaram', 'amit.sundaram@example.in', '+91 99003 33445', 'ACTIVE'),
-(8, 'PATIENT', 'Deepa Nair', 'deepa.nair@example.in', '+91 99004 44556', 'ACTIVE'),
-(9, 'PATIENT', 'Karthik Reddy', 'karthik.reddy@example.in', '+91 99005 55667', 'ACTIVE'),
-(10, 'RECEPTIONIST', 'Sunita Rao', 'sunita.rao@apollohospitals.com', '+91 98451 99887', 'ACTIVE'),
-(11, 'ADMIN', 'Manoj Kumar', 'admin.manoj@apollohospitals.com', '+91 98452 88776', 'ACTIVE');
+INSERT INTO `users` (`id`, `role`, `full_name`, `email`, `phone`, `password_hash`, `status`) VALUES
+(1, 'DOCTOR', 'Dr. Priya Sharma', 'priya.sharma@apollohospitals.com', '+91 98450 12345', '$2b$10$Qg5dcBiYIBTgpcMkEAg6I.3QzbdZGJJTpL/4YSWzORuyVgr5bRqWi', 'ACTIVE'),
+(2, 'DOCTOR', 'Dr. Rajesh Kulkarni', 'rajesh.kulkarni@apollohospitals.com', '+91 98450 23456', '$2b$10$Qg5dcBiYIBTgpcMkEAg6I.3QzbdZGJJTpL/4YSWzORuyVgr5bRqWi', 'ACTIVE'),
+(3, 'DOCTOR', 'Dr. Ananya Iyer', 'ananya.iyer@apollohospitals.com', '+91 98450 34567', '$2b$10$Qg5dcBiYIBTgpcMkEAg6I.3QzbdZGJJTpL/4YSWzORuyVgr5bRqWi', 'ACTIVE'),
+(4, 'DOCTOR', 'Dr. Vikram Venkatesh', 'vikram.venkatesh@apollohospitals.com', '+91 98450 45678', '$2b$10$Qg5dcBiYIBTgpcMkEAg6I.3QzbdZGJJTpL/4YSWzORuyVgr5bRqWi', 'ACTIVE'),
+(5, 'PATIENT', 'Rahul Verma', 'rahul.verma@example.in', '+91 99001 11223', '$2b$10$Qg5dcBiYIBTgpcMkEAg6I.3QzbdZGJJTpL/4YSWzORuyVgr5bRqWi', 'ACTIVE'),
+(6, 'PATIENT', 'Sneha Patel', 'sneha.patel@example.in', '+91 99002 22334', '$2b$10$Qg5dcBiYIBTgpcMkEAg6I.3QzbdZGJJTpL/4YSWzORuyVgr5bRqWi', 'ACTIVE'),
+(7, 'PATIENT', 'Amit Sundaram', 'amit.sundaram@example.in', '+91 99003 33445', '$2b$10$Qg5dcBiYIBTgpcMkEAg6I.3QzbdZGJJTpL/4YSWzORuyVgr5bRqWi', 'ACTIVE'),
+(8, 'PATIENT', 'Deepa Nair', 'deepa.nair@example.in', '+91 99004 44556', '$2b$10$Qg5dcBiYIBTgpcMkEAg6I.3QzbdZGJJTpL/4YSWzORuyVgr5bRqWi', 'ACTIVE'),
+(9, 'PATIENT', 'Karthik Reddy', 'karthik.reddy@example.in', '+91 99005 55667', '$2b$10$Qg5dcBiYIBTgpcMkEAg6I.3QzbdZGJJTpL/4YSWzORuyVgr5bRqWi', 'ACTIVE'),
+(10, 'RECEPTIONIST', 'Sunita Rao', 'sunita.rao@apollohospitals.com', '+91 98451 99887', '$2b$10$Qg5dcBiYIBTgpcMkEAg6I.3QzbdZGJJTpL/4YSWzORuyVgr5bRqWi', 'ACTIVE'),
+(11, 'ADMIN', 'Manoj Kumar', 'admin.manoj@apollohospitals.com', '+91 98452 88776', '$2b$10$Qg5dcBiYIBTgpcMkEAg6I.3QzbdZGJJTpL/4YSWzORuyVgr5bRqWi', 'ACTIVE');
 
 -- ----------------------------------------------------------------------------
 -- 2. Seed: doctors

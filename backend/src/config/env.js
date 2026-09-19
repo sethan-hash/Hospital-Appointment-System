@@ -17,4 +17,8 @@ export const env = {
     database: process.env.DB_NAME || 'medlink_care',
     connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT, 10) || 10,
   },
+  jwt: {
+    secret: process.env.JWT_SECRET || 'medlink-care-jwt-secret-key-local-dev-2026',
+    expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+  },
 };

@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "db:setup": "node src/scripts/setupDatabase.js"
+    "db:setup": "node src/scripts/setupDatabase.js",
+    "db:migrate": "node src/scripts/migrate.js",
+    "test:auth": "node src/scripts/testAuth.js"
   },
   "keywords": [
     "express",
@@ -18,9 +20,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.0",
     "mysql2": "^3.12.0"
   },

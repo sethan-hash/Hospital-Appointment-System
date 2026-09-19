@@ -7,16 +7,18 @@ import { Icon } from '../../components/common/Icon';
 import { useAuth } from '../../hooks/useAuth';
 import { isValidEmail, isNonEmptyString } from '../../utils/validators';
 
+import { getDashboardPathForRole } from '../../components/common/RoleRoute';
+
 export function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState('patient@example.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('rahul.verma@example.in');
+  const [password, setPassword] = useState('Password123!');
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     const newErrors = {};
 
@@ -35,20 +37,29 @@ export function LoginPage() {
     setErrors({});
     setIsLoading(true);
 
-    setTimeout(() => {
-      login(email, password);
+    try {
+      const user = await login(email, password);
+      const targetDashboard = getDashboardPathForRole(user.role);
+      navigate(targetDashboard);
+    } catch (err) {
+      setErrors({ form: err.message || 'Invalid email or password.' });
+    } finally {
       setIsLoading(false);
-      navigate('/patient/dashboard');
-    }, 400);
+    }
   };
 
-  const handleBiometricLogin = () => {
+  const handleBiometricLogin = async () => {
     setIsLoading(true);
-    setTimeout(() => {
-      login('patient@example.com', 'biometric');
+    setErrors({});
+    try {
+      const user = await login('rahul.verma@example.in', 'Password123!');
+      const targetDashboard = getDashboardPathForRole(user.role);
+      navigate(targetDashboard);
+    } catch (err) {
+      setErrors({ form: err.message || 'Biometric authentication failed.' });
+    } finally {
       setIsLoading(false);
-      navigate('/patient/dashboard');
-    }, 500);
+    }
   };
 
   return (
@@ -75,6 +86,13 @@ export function LoginPage() {
 
         {/* Login Form */}
         <form onSubmit={handleLoginSubmit} className="flex flex-col gap-4">
+          {errors.form && (
+            <div className="bg-error-container/20 border border-error/40 text-error text-body-sm rounded-xl p-3 flex items-center gap-2">
+              <Icon name="error" className="text-xl shrink-0" />
+              <span>{errors.form}</span>
+            </div>
+          )}
+
           <Input
             label="Email Address"
             id="email"
