@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PatientLayout } from '../../layouts/PatientLayout';
 import { Card } from '../../components/common/Card';
@@ -8,6 +8,7 @@ import { RatingStars } from '../../components/common/RatingStars';
 import { DatePickerStrip } from '../../components/patient/DatePickerStrip';
 import { TimeSlotPicker } from '../../components/patient/TimeSlotPicker';
 import { useDoctor } from '../../hooks/useDoctor';
+import { useDoctorAvailability } from '../../hooks/useDoctorAvailability';
 import { useAppointments } from '../../hooks/useAppointments';
 import { formatRating } from '../../utils/formatters';
 
@@ -17,39 +18,110 @@ export function BookAppointmentPage() {
   const { bookNewAppointment } = useAppointments();
 
   const { doctor, loading } = useDoctor(doctorId || 'doc-1');
+  const { schedule } = useDoctorAvailability(doctorId);
+
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split('T')[0]
   );
-  const [selectedSlot, setSelectedSlot] = useState('10:00 AM');
+  const [slotOverride, setSlotOverride] = useState(null);
+  const [reason, setReason] = useState('');
   const [isBooking, setIsBooking] = useState(false);
+  const [bookingError, setBookingError] = useState(null);
 
-  useEffect(() => {
-    if (doctor?.availableSlots?.length) {
-      setSelectedSlot(doctor.availableSlots[0]);
+  /**
+   * Generates slot strings ("H:MM AM/PM") for the selected date's weekday
+   * from the real doctor_schedules data returned by useDoctorAvailability.
+   * Returns an empty array when the doctor doesn't work on that weekday.
+   */
+  const availableSlots = useMemo(() => {
+    if (!schedule || schedule.length === 0 || !selectedDate) return [];
+
+    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const dayName = DAY_NAMES[new Date(y, m - 1, d).getDay()];
+    const dayEntry = schedule.find((s) => s.day === dayName && s.available);
+    if (!dayEntry) return [];
+
+    // Parse "H:MM AM/PM - H:MM AM/PM" from the schedule entry
+    const parseTime12 = (str) => {
+      const [timePart, period] = str.trim().split(' ');
+      let [h, min] = timePart.split(':').map(Number);
+      if (period === 'PM' && h !== 12) h += 12;
+      if (period === 'AM' && h === 12) h = 0;
+      return h * 60 + min;
+    };
+    const [startStr, endStr] = dayEntry.hours.split(' - ');
+    const startMins = parseTime12(startStr);
+    const endMins   = parseTime12(endStr);
+    const step      = dayEntry.slotDurationMinutes || 30;
+
+    const slots = [];
+    for (let mins = startMins; mins + step <= endMins; mins += step) {
+      const h24 = Math.floor(mins / 60);
+      const min = mins % 60;
+      const suffix = h24 >= 12 ? 'PM' : 'AM';
+      const h12 = h24 % 12 || 12;
+      slots.push(`${h12}:${String(min).padStart(2, '0')} ${suffix}`);
     }
-  }, [doctor]);
+    return slots;
+  }, [schedule, selectedDate]);
+
+  // Derive active selected slot directly — avoids unnecessary effect renders
+  const selectedSlot =
+    slotOverride !== null && availableSlots.includes(slotOverride)
+      ? slotOverride
+      : availableSlots.length > 0
+      ? availableSlots[0]
+      : null;
+
+  const handleSelectDate = (date) => {
+    setSelectedDate(date);
+    setSlotOverride(null);
+    setBookingError(null);
+  };
+
+  const handleSelectSlot = (slot) => {
+    setSlotOverride(slot);
+    setBookingError(null);
+  };
 
   const handleConfirmAppointment = async () => {
     if (!doctor || !selectedDate || !selectedSlot) return;
 
     setIsBooking(true);
+    setBookingError(null);
     try {
       const newApt = await bookNewAppointment({
         doctorId: doctor.id,
+        appointmentDate: selectedDate,
+        date: selectedDate,
+        startTime: selectedSlot,
+        time: selectedSlot,
+        reason: reason.trim() || undefined,
         doctorName: doctor.name,
         doctorTitle: doctor.title,
         department: doctor.department,
         doctorImage: doctor.image,
-        date: selectedDate,
-        time: selectedSlot,
-        location: `${doctor.clinicName}, Apollo Hospitals, Bengaluru – Room 304`,
+        location: doctor.clinicName ? `${doctor.clinicName}, Apollo Hospitals, Bengaluru – Room 304` : 'Apollo Hospitals, Bengaluru – Room 304',
       });
 
       navigate('/patient/appointments/confirmation', {
-        state: { appointment: newApt },
+        state: {
+          appointment: {
+            ...newApt,
+            doctorName: newApt.doctorName || doctor.name,
+            doctorTitle: newApt.doctorTitle || doctor.title,
+            department: newApt.department || doctor.department,
+            date: newApt.date || selectedDate,
+            time: newApt.time || selectedSlot,
+            location: newApt.location || doctor.clinicName || 'Apollo Hospitals, Bengaluru – Room 304',
+            status: newApt.status || 'Confirmed',
+          },
+        },
       });
     } catch (err) {
       console.error('Booking failed:', err);
+      setBookingError(err.message || 'Failed to book appointment. Please choose a different time slot.');
     } finally {
       setIsBooking(false);
     }
@@ -88,11 +160,20 @@ export function BookAppointmentPage() {
 
           <div className="flex-shrink-0 flex justify-center md:justify-start">
             <div className="relative">
-              <img
-                src={doctor.image}
-                alt={doctor.name}
-                className="w-28 h-28 md:w-36 md:h-36 rounded-xl object-cover shadow-sm border border-outline-variant/30"
-              />
+              {/* Null-safe avatar — DB doctors have no stored photo */}
+              <div className="w-28 h-28 md:w-36 md:h-36 rounded-xl overflow-hidden bg-surface-container flex items-center justify-center shadow-sm border border-outline-variant/30">
+                {doctor.image ? (
+                  <img
+                    src={doctor.image}
+                    alt={doctor.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="material-symbols-rounded text-[52px] text-on-surface-variant select-none">
+                    person
+                  </span>
+                )}
+              </div>
               <div className="absolute -bottom-2 -right-2 bg-secondary text-on-secondary px-2.5 py-0.5 rounded-full font-label-md text-label-md flex items-center gap-1 shadow-sm">
                 <Icon name="star" filled={true} className="text-[14px]" />
                 <span>{formatRating(doctor.rating)}</span>
@@ -138,14 +219,45 @@ export function BookAppointmentPage() {
           <Card className="p-4 md:p-6">
             <DatePickerStrip
               selectedDate={selectedDate}
-              onSelectDate={(date) => setSelectedDate(date)}
+              onSelectDate={handleSelectDate}
             />
 
-            <TimeSlotPicker
-              availableSlots={doctor.availableSlots || []}
-              selectedSlot={selectedSlot}
-              onSelectSlot={(slot) => setSelectedSlot(slot)}
-            />
+            {availableSlots.length > 0 ? (
+              <TimeSlotPicker
+                availableSlots={availableSlots}
+                selectedSlot={selectedSlot}
+                onSelectSlot={handleSelectSlot}
+              />
+            ) : (
+              <p className="text-body-sm text-on-surface-variant text-center py-4 mt-2">
+                {schedule.length === 0
+                  ? 'Loading schedule…'
+                  : 'Doctor is not available on this day. Please choose another date.'}
+              </p>
+            )}
+
+            {/* Optional Reason for Visit */}
+            <div className="mt-5 pt-4 border-t border-outline-variant/20">
+              <label htmlFor="booking-reason" className="font-label-lg text-label-lg text-on-surface-variant block mb-2 font-semibold">
+                Reason for Visit <span className="font-normal text-on-surface-variant/70 text-xs">(optional)</span>
+              </label>
+              <textarea
+                id="booking-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Briefly describe your symptoms or reason for visit…"
+                maxLength={255}
+                rows={2}
+                className="w-full px-3 py-2 text-body-sm bg-surface-container-lowest border border-outline-variant/30 rounded-lg text-on-surface focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary resize-none"
+              />
+            </div>
+
+            {bookingError && (
+              <div className="mt-4 flex items-start gap-2 p-3 rounded-lg bg-error-container/20 border border-error/20">
+                <Icon name="error" className="text-error text-lg flex-shrink-0 mt-0.5" />
+                <p className="text-body-sm text-error">{bookingError}</p>
+              </div>
+            )}
           </Card>
         </section>
 
@@ -196,6 +308,7 @@ export function BookAppointmentPage() {
             loading={isBooking}
             iconTrailing="event_available"
             onClick={handleConfirmAppointment}
+            disabled={!selectedSlot || isBooking}
             className="py-4 shadow-lg min-h-[52px]"
           >
             Confirm Appointment

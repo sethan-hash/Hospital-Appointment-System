@@ -13,7 +13,8 @@
     "test:profile": "node src/scripts/testPatientProfile.js",
     "test:doctors": "node src/scripts/testDoctorSearch.js",
     "test:details": "node src/scripts/testDoctorDetails.js",
-    "test": "node src/scripts/testAuth.js && node src/scripts/testPatientProfile.js && node src/scripts/testDoctorSearch.js && node src/scripts/testDoctorDetails.js"
+    "test:appointments": "node src/scripts/testAppointmentBooking.js",
+    "test": "node src/scripts/testAuth.js && node src/scripts/testPatientProfile.js && node src/scripts/testDoctorSearch.js && node src/scripts/testDoctorDetails.js && node src/scripts/testAppointmentBooking.js"
   },
   "keywords": [
     "express",
