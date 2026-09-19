@@ -18,6 +18,7 @@ export function FindDoctorPage() {
     selectedSpecialty,
     setSelectedSpecialty,
     loading,
+    error,
   } = useDoctors();
 
   const handleSpecialtyClick = (specialtyId) => {
@@ -96,6 +97,24 @@ export function FindDoctorPage() {
               <Icon name="progress_activity" className="animate-spin text-3xl mr-2" />
               <span className="font-body-md">Finding doctors...</span>
             </div>
+          ) : error ? (
+            <EmptyState
+              icon="wifi_off"
+              title="Could not load doctors"
+              description="There was a problem connecting to the server. Please try again."
+              action={
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedSpecialty(null);
+                  }}
+                >
+                  Retry
+                </Button>
+              }
+            />
           ) : doctors.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {doctors.map((doctor) => (
@@ -106,7 +125,11 @@ export function FindDoctorPage() {
             <EmptyState
               icon="search_off"
               title="No doctors found"
-              description={`We couldn't find any specialist matching "${searchQuery}". Try selecting a different specialty or clearing filters.`}
+              description={
+                searchQuery || selectedSpecialty
+                  ? `We couldn't find any specialist matching your search. Try clearing filters.`
+                  : 'No doctors are currently available. Please check back later.'
+              }
               action={
                 <Button
                   variant="primary"

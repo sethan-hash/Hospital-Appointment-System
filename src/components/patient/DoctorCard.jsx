@@ -17,12 +17,18 @@ export function DoctorCard({ doctor, onBookClick }) {
       <div>
         <div className="flex items-start gap-md mb-4">
           {/* Doctor Avatar */}
-          <div className="w-16 h-16 rounded-full overflow-hidden bg-surface-container flex-shrink-0 border border-outline-variant/20">
-            <img
-              src={doctor.image}
-              alt={doctor.name}
-              className="w-full h-full object-cover"
-            />
+          <div className="w-16 h-16 rounded-full overflow-hidden bg-surface-container flex-shrink-0 border border-outline-variant/20 flex items-center justify-center">
+            {doctor.image ? (
+              <img
+                src={doctor.image}
+                alt={doctor.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="material-symbols-rounded text-[32px] text-on-surface-variant select-none">
+                person
+              </span>
+            )}
           </div>
 
           {/* Doctor Info */}

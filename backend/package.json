@@ -11,7 +11,8 @@
     "db:migrate": "node src/scripts/migrate.js",
     "test:auth": "node src/scripts/testAuth.js",
     "test:profile": "node src/scripts/testPatientProfile.js",
-    "test": "node src/scripts/testAuth.js && node src/scripts/testPatientProfile.js"
+    "test:doctors": "node src/scripts/testDoctorSearch.js",
+    "test": "node src/scripts/testAuth.js && node src/scripts/testPatientProfile.js && node src/scripts/testDoctorSearch.js"
   },
   "keywords": [
     "express",
