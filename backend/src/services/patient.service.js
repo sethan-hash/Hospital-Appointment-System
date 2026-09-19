@@ -183,3 +183,314 @@ export async function updatePatientProfile(userId, updates) {
 
   return getPatientProfileByUserId(userId);
 }
+
+/**
+ * Normalizes a raw medical record row with its matching vitals and medications.
+ * @param {object} record
+ * @param {object|null} vitals
+ * @param {Array<object>} medications
+ * @returns {object|null}
+ */
+function normalizeMedicalRecord(record, vitals = null, medications = []) {
+  if (!record) return null;
+
+  const normalizedVitals = vitals
+    ? {
+        id: vitals.id,
+        patientId: vitals.patient_id,
+        appointmentId: vitals.appointment_id,
+        recordedAt: vitals.recorded_at,
+        bloodPressureSystolic: vitals.blood_pressure_systolic,
+        bloodPressureDiastolic: vitals.blood_pressure_diastolic,
+        bloodPressure:
+          vitals.blood_pressure_systolic && vitals.blood_pressure_diastolic
+            ? `${vitals.blood_pressure_systolic}/${vitals.blood_pressure_diastolic} mmHg`
+            : null,
+        heartRateBpm: vitals.heart_rate_bpm,
+        respiratoryRateBpm: vitals.respiratory_rate_bpm,
+        temperatureCelsius:
+          vitals.temperature_celsius !== null ? Number(vitals.temperature_celsius) : null,
+        spo2Percentage:
+          vitals.spo2_percentage !== null ? Number(vitals.spo2_percentage) : null,
+        weightKg: vitals.weight_kg !== null ? Number(vitals.weight_kg) : null,
+        heightCm: vitals.height_cm !== null ? Number(vitals.height_cm) : null,
+        bmi: vitals.bmi !== null ? Number(vitals.bmi) : null,
+        notes: vitals.notes || null,
+      }
+    : null;
+
+  const normalizedMedications = (medications || []).map((m) => ({
+    id: m.id,
+    medicalRecordId: m.medical_record_id,
+    medicineName: m.medicine_name,
+    dosage: m.dosage,
+    frequency: m.frequency,
+    duration: m.duration,
+    instructions: m.instructions || '',
+  }));
+
+  const prescriptions = normalizedMedications.map(
+    (m) =>
+      `${m.medicineName} (${m.dosage}) — ${m.frequency}, ${m.duration}${
+        m.instructions ? ` • ${m.instructions}` : ''
+      }`
+  );
+
+  return {
+    id: record.id,
+    patientId: record.patient_id,
+    doctorId: record.doctor_id,
+    doctorName: record.doctor_name,
+    doctor: record.doctor_name,
+    specialty: record.doctor_specialty,
+    department: record.doctor_department || record.doctor_specialty,
+    appointmentId: record.appointment_id,
+    appointmentType: record.appointment_type || null,
+    appointmentStatus: record.appointment_status || null,
+    reasonForVisit: record.reason_for_visit || null,
+    visitDate: record.visit_date,
+    date: record.visit_date,
+    diagnosis: record.diagnosis,
+    treatmentPlan: record.treatment_plan || null,
+    treatment: record.treatment_plan || null,
+    doctorNotes: record.doctor_notes || null,
+    notes: record.doctor_notes || null,
+    vitals: normalizedVitals,
+    medications: normalizedMedications,
+    prescriptions,
+    createdAt: record.created_at,
+    updatedAt: record.updated_at,
+  };
+}
+
+/**
+ * Retrieves all medical records for the authenticated patient, ordered newest first.
+ * @param {number|string} userId
+ * @returns {Promise<Array<object>>}
+ */
+export async function getMedicalRecordsByUserId(userId) {
+  const [patients] = await pool.query(
+    'SELECT id FROM patients WHERE user_id = ? LIMIT 1;',
+    [userId]
+  );
+
+  if (patients.length === 0) {
+    return [];
+  }
+
+  const patientId = patients[0].id;
+
+  const [records] = await pool.query(
+    `SELECT 
+       mr.id,
+       mr.patient_id,
+       mr.doctor_id,
+       mr.appointment_id,
+       mr.diagnosis,
+       mr.treatment_plan,
+       mr.doctor_notes,
+       DATE_FORMAT(mr.visit_date, '%Y-%m-%d') AS visit_date,
+       mr.created_at,
+       mr.updated_at,
+       u.full_name AS doctor_name,
+       d.specialization AS doctor_specialty,
+       d.department AS doctor_department,
+       a.type AS appointment_type,
+       a.status AS appointment_status,
+       a.reason_for_visit
+     FROM medical_records mr
+     JOIN doctors d ON d.id = mr.doctor_id
+     JOIN users u ON u.id = d.user_id
+     LEFT JOIN appointments a ON a.id = mr.appointment_id
+     WHERE mr.patient_id = ?
+     ORDER BY mr.visit_date DESC, mr.id DESC;`,
+    [patientId]
+  );
+
+  if (records.length === 0) {
+    return [];
+  }
+
+  const [vitalsRows] = await pool.query(
+    `SELECT 
+       id,
+       patient_id,
+       appointment_id,
+       recorded_at,
+       blood_pressure_systolic,
+       blood_pressure_diastolic,
+       heart_rate_bpm,
+       respiratory_rate_bpm,
+       temperature_celsius,
+       spo2_percentage,
+       weight_kg,
+       height_cm,
+       bmi,
+       notes
+     FROM vitals
+     WHERE patient_id = ?;`,
+    [patientId]
+  );
+
+  const [medicationsRows] = await pool.query(
+    `SELECT 
+       m.id,
+       m.medical_record_id,
+       m.medicine_name,
+       m.dosage,
+       m.frequency,
+       m.duration,
+       m.instructions
+     FROM medications m
+     JOIN medical_records mr ON mr.id = m.medical_record_id
+     WHERE mr.patient_id = ?;`,
+    [patientId]
+  );
+
+  return records.map((record) => {
+    let matchedVitals = null;
+    if (record.appointment_id) {
+      matchedVitals = vitalsRows.find((v) => v.appointment_id === record.appointment_id) || null;
+    }
+    if (!matchedVitals) {
+      matchedVitals = vitalsRows.find((v) => {
+        if (!v.recorded_at) return false;
+        const recordedDate = v.recorded_at instanceof Date
+          ? v.recorded_at.toISOString().split('T')[0]
+          : String(v.recorded_at).split(' ')[0];
+        return recordedDate === record.visit_date;
+      }) || null;
+    }
+
+    const matchedMeds = medicationsRows.filter(
+      (m) => m.medical_record_id === record.id
+    );
+
+    return normalizeMedicalRecord(record, matchedVitals, matchedMeds);
+  });
+}
+
+/**
+ * Retrieves a single medical record by ID for the authenticated patient.
+ * Returns null if not found or if the record belongs to another patient.
+ * @param {number|string} userId
+ * @param {number|string} recordId
+ * @returns {Promise<object|null>}
+ */
+export async function getMedicalRecordById(userId, recordId) {
+  const [patients] = await pool.query(
+    'SELECT id FROM patients WHERE user_id = ? LIMIT 1;',
+    [userId]
+  );
+
+  if (patients.length === 0) {
+    return null;
+  }
+
+  const patientId = patients[0].id;
+
+  const [records] = await pool.query(
+    `SELECT 
+       mr.id,
+       mr.patient_id,
+       mr.doctor_id,
+       mr.appointment_id,
+       mr.diagnosis,
+       mr.treatment_plan,
+       mr.doctor_notes,
+       DATE_FORMAT(mr.visit_date, '%Y-%m-%d') AS visit_date,
+       mr.created_at,
+       mr.updated_at,
+       u.full_name AS doctor_name,
+       d.specialization AS doctor_specialty,
+       d.department AS doctor_department,
+       a.type AS appointment_type,
+       a.status AS appointment_status,
+       a.reason_for_visit
+     FROM medical_records mr
+     JOIN doctors d ON d.id = mr.doctor_id
+     JOIN users u ON u.id = d.user_id
+     LEFT JOIN appointments a ON a.id = mr.appointment_id
+     WHERE mr.id = ? AND mr.patient_id = ?
+     LIMIT 1;`,
+    [recordId, patientId]
+  );
+
+  if (records.length === 0) {
+    return null;
+  }
+
+  const record = records[0];
+
+  let matchedVitals = null;
+  if (record.appointment_id) {
+    const [vitals] = await pool.query(
+      `SELECT 
+         id,
+         patient_id,
+         appointment_id,
+         recorded_at,
+         blood_pressure_systolic,
+         blood_pressure_diastolic,
+         heart_rate_bpm,
+         respiratory_rate_bpm,
+         temperature_celsius,
+         spo2_percentage,
+         weight_kg,
+         height_cm,
+         bmi,
+         notes
+       FROM vitals
+       WHERE appointment_id = ? AND patient_id = ?
+       LIMIT 1;`,
+      [record.appointment_id, patientId]
+    );
+    if (vitals.length > 0) {
+      matchedVitals = vitals[0];
+    }
+  }
+
+  if (!matchedVitals) {
+    const [vitals] = await pool.query(
+      `SELECT 
+         id,
+         patient_id,
+         appointment_id,
+         recorded_at,
+         blood_pressure_systolic,
+         blood_pressure_diastolic,
+         heart_rate_bpm,
+         respiratory_rate_bpm,
+         temperature_celsius,
+         spo2_percentage,
+         weight_kg,
+         height_cm,
+         bmi,
+         notes
+       FROM vitals
+       WHERE patient_id = ? AND DATE(recorded_at) = ?
+       LIMIT 1;`,
+      [patientId, record.visit_date]
+    );
+    if (vitals.length > 0) {
+      matchedVitals = vitals[0];
+    }
+  }
+
+  const [medications] = await pool.query(
+    `SELECT 
+       id,
+       medical_record_id,
+       medicine_name,
+       dosage,
+       frequency,
+       duration,
+       instructions
+     FROM medications
+     WHERE medical_record_id = ?;`,
+    [record.id]
+  );
+
+  return normalizeMedicalRecord(record, matchedVitals, medications);
+}
+

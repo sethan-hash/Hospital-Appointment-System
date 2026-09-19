@@ -14,4 +14,11 @@ router.get('/profile', patientController.getProfile);
 // PUT /api/patients/profile
 router.put('/profile', validateProfileUpdate, patientController.updateProfile);
 
+// GET /api/patients/medical-records
+router.get('/medical-records', patientController.getMedicalRecords);
+
+// GET /api/patients/medical-records/:id
+router.get('/medical-records/:id', patientController.getMedicalRecordById);
+
 export default router;
+
