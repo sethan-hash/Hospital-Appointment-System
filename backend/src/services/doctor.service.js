@@ -204,3 +204,124 @@ export async function getDoctorAvailability(doctorId) {
 
   return { doctorExists: true, schedule };
 }
+
+/**
+ * Resolves the doctors.id for a given users.id.
+ * Returns null if no doctor profile exists for that user.
+ *
+ * @param {number} userId
+ * @returns {Promise<number|null>}
+ */
+export async function getDoctorIdByUserId(userId) {
+  const [rows] = await pool.query(
+    'SELECT id FROM doctors WHERE user_id = ? LIMIT 1;',
+    [userId]
+  );
+  return rows.length > 0 ? rows[0].id : null;
+}
+
+/**
+ * Retrieves doctor dashboard data derived exclusively from the authenticated userId.
+ * Never trusts a client-supplied doctor ID.
+ *
+ * Returns:
+ *   - doctor profile (name, specialization, department, hospital, experience)
+ *   - todayAppointments: all appointments for today sorted by appointment_time ASC
+ *   - statistics:
+ *       - todayCount        — appointments scheduled for today
+ *       - completedToday    — appointments with status COMPLETED and today's date
+ *       - upcomingTotal     — SCHEDULED appointments with appointment_date >= today
+ *       - totalPatients     — distinct patient_ids seen in this doctor's appointments
+ *
+ * @param {number} userId - From req.user.id
+ * @returns {Promise<object|null>}  null if the user has no doctor profile
+ */
+export async function getDashboardData(userId) {
+  // 1. Resolve doctor identity from userId — never from client input
+  const [[doctorRow]] = await pool.query(
+    `SELECT
+       d.id,
+       u.full_name         AS name,
+       u.email,
+       d.specialization,
+       d.department,
+       d.hospital_name     AS hospitalName,
+       d.qualification,
+       d.experience_years  AS experienceYears,
+       d.bio,
+       d.is_available      AS isAvailable
+     FROM doctors d
+     INNER JOIN users u ON u.id = d.user_id
+     WHERE d.user_id = ?
+     LIMIT 1;`,
+    [userId]
+  );
+
+  if (!doctorRow) {
+    return null;
+  }
+
+  const doctorId = doctorRow.id;
+
+  // 2. Today's date in YYYY-MM-DD (server local date)
+  const today = new Date();
+  const todayStr = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-');
+
+  // 3. Today's appointments (all statuses, sorted chronologically)
+  const [todayRows] = await pool.query(
+    `SELECT
+       a.id,
+       DATE_FORMAT(a.appointment_date, '%Y-%m-%d') AS appointmentDate,
+       TIME_FORMAT(a.appointment_time, '%H:%i')     AS appointmentTime,
+       a.status,
+       a.type,
+       a.reason_for_visit  AS reasonForVisit,
+       p.id                AS patientId,
+       u.full_name         AS patientName
+     FROM appointments a
+     INNER JOIN patients p ON p.id = a.patient_id
+     INNER JOIN users u    ON u.id = p.user_id
+     WHERE a.doctor_id = ?
+       AND a.appointment_date = ?
+     ORDER BY a.appointment_time ASC;`,
+    [doctorId, todayStr]
+  );
+
+  // 4. Statistics from DB — only what the schema can support
+  const [[statsRow]] = await pool.query(
+    `SELECT
+       COUNT(CASE WHEN a.appointment_date = ? THEN 1 END)                            AS todayCount,
+       COUNT(CASE WHEN a.appointment_date = ? AND a.status = 'COMPLETED' THEN 1 END) AS completedToday,
+       COUNT(CASE WHEN a.appointment_date >= ? AND a.status = 'SCHEDULED' THEN 1 END) AS upcomingTotal,
+       COUNT(DISTINCT a.patient_id)                                                   AS totalPatients
+     FROM appointments a
+     WHERE a.doctor_id = ?;`,
+    [todayStr, todayStr, todayStr, doctorId]
+  );
+
+  return {
+    doctor: {
+      id: doctorId,
+      name: doctorRow.name,
+      email: doctorRow.email,
+      specialization: doctorRow.specialization,
+      department: doctorRow.department,
+      hospitalName: doctorRow.hospitalName,
+      qualification: doctorRow.qualification,
+      experienceYears: doctorRow.experienceYears,
+      bio: doctorRow.bio || '',
+      isAvailable: Boolean(doctorRow.isAvailable),
+    },
+    todayAppointments: todayRows,
+    statistics: {
+      todayCount: Number(statsRow.todayCount),
+      completedToday: Number(statsRow.completedToday),
+      upcomingTotal: Number(statsRow.upcomingTotal),
+      totalPatients: Number(statsRow.totalPatients),
+    },
+  };
+}

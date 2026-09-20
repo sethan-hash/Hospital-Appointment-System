@@ -16,6 +16,7 @@
     "test:appointments": "node src/scripts/testAppointmentBooking.js",
     "test:management": "node src/scripts/testAppointmentManagement.js",
     "test:records": "node src/scripts/testMedicalRecords.js",
+    "test:dashboard": "node src/scripts/testDoctorDashboard.js",
     "test": "node src/scripts/testAuth.js && node src/scripts/testPatientProfile.js && node src/scripts/testDoctorSearch.js && node src/scripts/testDoctorDetails.js && node src/scripts/testAppointmentBooking.js && node src/scripts/testAppointmentManagement.js && node src/scripts/testMedicalRecords.js"
   },
   "keywords": [

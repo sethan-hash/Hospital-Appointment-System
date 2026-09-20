@@ -1,6 +1,31 @@
 import * as doctorService from '../services/doctor.service.js';
 
 /**
+ * Retrieves the authenticated doctor's dashboard data.
+ * Doctor identity is derived exclusively from req.user.id (JWT) — never from the client.
+ * GET /api/doctor/dashboard
+ */
+export async function getDashboard(req, res, next) {
+  try {
+    const data = await doctorService.getDashboardData(req.user.id);
+
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        message: 'Doctor profile not found for this account.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * Searches active doctors with optional name/specialty filters.
  * GET /api/doctors?search=&specialty=
  */

@@ -116,4 +116,35 @@ export const doctorService = {
     const payload = await response.json();
     return payload.data?.schedule || [];
   },
+
+  /**
+   * Retrieves the authenticated doctor's dashboard data.
+   * Doctor identity is derived server-side from the JWT — no doctorId param needed.
+   * Maps to GET /api/doctor/dashboard
+   *
+   * @returns {Promise<object|null>} { doctor, todayAppointments, statistics } or null
+   */
+  async getDashboard() {
+    const token = authService.getToken();
+    if (!token) return null;
+
+    const response = await fetch(`${API_BASE_URL}/doctor/dashboard`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403 || response.status === 404) {
+        return null;
+      }
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Failed to fetch dashboard (${response.status})`);
+    }
+
+    const payload = await response.json();
+    return payload.data || null;
+  },
 };
