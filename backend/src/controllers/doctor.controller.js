@@ -26,6 +26,42 @@ export async function getDashboard(req, res, next) {
 }
 
 /**
+ * Retrieves details for a specific appointment belonging to the authenticated doctor,
+ * including basic patient information.
+ * GET /api/doctor/appointments/:id
+ */
+export async function getAppointmentDetails(req, res, next) {
+  try {
+    const rawId = req.params.id;
+    if (!rawId || !/^\d+$/.test(rawId) || Number(rawId) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid appointment ID',
+      });
+    }
+
+    const appointmentId = parseInt(rawId, 10);
+    const result = await doctorService.getDoctorAppointmentDetails(req.user.id, appointmentId);
+
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: 'Appointment not found',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Appointment details retrieved successfully',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+
+/**
  * Searches active doctors with optional name/specialty filters.
  * GET /api/doctors?search=&specialty=
  */

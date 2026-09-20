@@ -325,3 +325,106 @@ export async function getDashboardData(userId) {
     },
   };
 }
+
+/**
+ * Retrieves details for a specific appointment belonging to the authenticated doctor,
+ * along with the patient's basic profile details.
+ *
+ * Strict doctor ownership is enforced:
+ *   WHERE a.id = ? AND a.doctor_id = ?
+ * If the appointment belongs to another doctor or does not exist, returns null.
+ *
+ * @param {number} userId - From req.user.id (JWT)
+ * @param {number} appointmentId - The appointment ID to inspect
+ * @returns {Promise<object|null>}
+ */
+export async function getDoctorAppointmentDetails(userId, appointmentId) {
+  const doctorId = await getDoctorIdByUserId(userId);
+  if (!doctorId) {
+    return null;
+  }
+
+  const [rows] = await pool.query(
+    `SELECT
+       a.id,
+       DATE_FORMAT(a.appointment_date, '%Y-%m-%d') AS appointmentDate,
+       TIME_FORMAT(a.appointment_time, '%H:%i')     AS appointmentTime,
+       a.status,
+       a.type,
+       a.reason_for_visit                          AS reason,
+       d.hospital_name                             AS location,
+       a.created_at                                AS createdAt,
+       p.id                                        AS patientId,
+       u.full_name                                 AS patientName,
+       u.email                                     AS patientEmail,
+       u.phone                                     AS patientPhone,
+       DATE_FORMAT(p.date_of_birth, '%Y-%m-%d')    AS patientDateOfBirth,
+       p.gender                                    AS patientGender,
+       p.blood_group                               AS patientBloodGroup,
+       p.address                                   AS patientAddress,
+       p.city                                      AS patientCity,
+       p.state                                     AS patientState,
+       p.pincode                                   AS patientPincode,
+       p.emergency_contact_name                    AS emergencyContactName,
+       p.emergency_contact_phone                   AS emergencyContactPhone,
+       p.allergies                                 AS patientAllergies,
+       p.chronic_conditions                        AS patientChronicConditions
+     FROM appointments a
+     INNER JOIN doctors d  ON d.id = a.doctor_id
+     INNER JOIN patients p ON p.id = a.patient_id
+     INNER JOIN users u    ON u.id = p.user_id
+     WHERE a.id = ?
+       AND a.doctor_id = ?
+     LIMIT 1;`,
+    [appointmentId, doctorId]
+  );
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const row = rows[0];
+
+  const formatTime12 = (t) => {
+    if (!t) return '';
+    const [hStr, mStr] = t.split(':');
+    const h = parseInt(hStr, 10);
+    const m = parseInt(mStr, 10);
+    const suffix = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
+  };
+
+  return {
+    appointment: {
+      id: row.id,
+      date: row.appointmentDate,
+      appointmentDate: row.appointmentDate,
+      time: formatTime12(row.appointmentTime),
+      appointmentTime: row.appointmentTime,
+      status: row.status,
+      type: row.type,
+      reason: row.reason || '',
+      location: row.location || '',
+      createdAt: row.createdAt,
+    },
+    patient: {
+      id: row.patientId,
+      name: row.patientName,
+      email: row.patientEmail,
+      phone: row.patientPhone,
+      dateOfBirth: row.patientDateOfBirth || null,
+      gender: row.patientGender || null,
+      bloodGroup: row.patientBloodGroup || null,
+      address: row.patientAddress || null,
+      city: row.patientCity || null,
+      state: row.patientState || null,
+      pincode: row.patientPincode || null,
+      emergencyContactName: row.emergencyContactName || null,
+      emergencyContactPhone: row.emergencyContactPhone || null,
+      allergies: row.patientAllergies || null,
+      chronicConditions: row.patientChronicConditions || null,
+    },
+  };
+}
+

@@ -10,4 +10,8 @@ router.use(authenticate, requireRole('DOCTOR'));
 // GET /api/doctor/dashboard
 router.get('/dashboard', doctorController.getDashboard);
 
+// GET /api/doctor/appointments/:id
+router.get('/appointments/:id', doctorController.getAppointmentDetails);
+
 export default router;
+

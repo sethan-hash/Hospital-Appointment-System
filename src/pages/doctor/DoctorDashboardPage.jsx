@@ -6,6 +6,7 @@ import { Button } from '../../components/common/Button';
 import { Icon } from '../../components/common/Icon';
 import { StatCard } from '../../components/patient/StatCard';
 import { Badge } from '../../components/common/Badge';
+import { DoctorAppointmentDetailModal } from '../../components/doctor/DoctorAppointmentDetailModal';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -43,12 +44,23 @@ const AVAIL_VARIANT = {
 
 // ─── Appointment Row ─────────────────────────────────────────────────────────
 
-function AppointmentRow({ appt }) {
+function AppointmentRow({ appt, onSelect }) {
   const typeIcon = appt.type === 'TELECONSULTATION' ? 'videocam' : 'local_hospital';
   const typeLabel = appt.type === 'TELECONSULTATION' ? 'Tele' : 'In-Person';
 
   return (
-    <div className="flex items-center gap-4 p-3 rounded-xl bg-surface-container-lowest border border-outline-variant/10 hover:bg-surface-container transition-colors">
+    <div
+      onClick={() => onSelect(appt.id)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect(appt.id);
+        }
+      }}
+      className="flex items-center gap-4 p-3 rounded-xl bg-surface-container-lowest border border-outline-variant/10 hover:bg-surface-container transition-colors cursor-pointer group"
+    >
       {/* Time */}
       <div className="w-16 shrink-0 text-center">
         <p className="font-label-lg text-primary font-semibold text-sm">
@@ -58,7 +70,9 @@ function AppointmentRow({ appt }) {
 
       {/* Patient */}
       <div className="flex-1 min-w-0">
-        <p className="font-body-md text-on-surface font-medium truncate">{appt.patientName}</p>
+        <p className="font-body-md text-on-surface font-medium truncate group-hover:text-primary transition-colors">
+          {appt.patientName}
+        </p>
         {appt.reasonForVisit && (
           <p className="font-label-sm text-on-surface-variant text-xs truncate">{appt.reasonForVisit}</p>
         )}
@@ -74,6 +88,11 @@ function AppointmentRow({ appt }) {
       <Badge variant={STATUS_VARIANT[appt.status] || 'info'}>
         {STATUS_LABEL[appt.status] || appt.status}
       </Badge>
+
+      {/* Detail cue */}
+      <div className="text-on-surface-variant opacity-50 group-hover:opacity-100 group-hover:text-primary transition-opacity">
+        <Icon name="chevron_right" className="text-xl" />
+      </div>
     </div>
   );
 }
@@ -87,6 +106,7 @@ export function DoctorDashboardPage() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState(null);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -239,11 +259,22 @@ export function DoctorDashboardPage() {
                   </div>
                 ) : (
                   todayAppointments.map((appt) => (
-                    <AppointmentRow key={appt.id} appt={appt} />
+                    <AppointmentRow
+                      key={appt.id}
+                      appt={appt}
+                      onSelect={(id) => setSelectedAppointmentId(id)}
+                    />
                   ))
                 )}
               </div>
             </div>
+
+            {/* Appointment & Patient Details Modal */}
+            <DoctorAppointmentDetailModal
+              appointmentId={selectedAppointmentId}
+              isOpen={Boolean(selectedAppointmentId)}
+              onClose={() => setSelectedAppointmentId(null)}
+            />
           </>
         )}
       </main>

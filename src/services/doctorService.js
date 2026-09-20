@@ -147,4 +147,37 @@ export const doctorService = {
     const payload = await response.json();
     return payload.data || null;
   },
+
+  /**
+   * Retrieves full appointment and patient details for a doctor's appointment.
+   * Derives doctor authorization from JWT.
+   *
+   * @param {number|string} id - Appointment ID
+   * @returns {Promise<{ appointment: object, patient: object }>}
+   */
+  async getAppointmentDetails(id) {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('Authentication required.');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/doctor/appointments/${id}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || `Failed to fetch appointment details (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const payload = await response.json();
+    return payload.data || null;
+  },
 };
+
