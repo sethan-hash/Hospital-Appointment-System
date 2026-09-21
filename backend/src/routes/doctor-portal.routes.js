@@ -25,6 +25,14 @@ router.post('/medical-records/:recordId/medications', doctorController.addMedica
 router.put('/medications/:id', doctorController.updateMedication);
 router.delete('/medications/:id', doctorController.deleteMedication);
 
+// Doctor Profile
+router.get('/profile', doctorController.getProfile);
+router.put('/profile', doctorController.updateProfile);
+
+// Office Hours & Schedule
+router.get('/schedule', doctorController.getSchedule);
+router.put('/schedule', doctorController.updateSchedule);
+
 export default router;
 
 

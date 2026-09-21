@@ -515,3 +515,195 @@ export async function getAvailability(req, res, next) {
     next(error);
   }
 }
+
+/**
+ * Retrieves the authenticated doctor's full profile.
+ * GET /api/doctor/profile
+ */
+export async function getProfile(req, res, next) {
+  try {
+    const profile = await doctorService.getDoctorProfile(req.user.id);
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Doctor profile not found.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: { profile },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Updates the authenticated doctor's editable profile information.
+ * PUT /api/doctor/profile
+ */
+export async function updateProfile(req, res, next) {
+  try {
+    const data = req.body || {};
+
+    // Input validation
+    if (data.name !== undefined || data.fullName !== undefined) {
+      const name = String(data.name || data.fullName).trim();
+      if (name.length < 2 || name.length > 100) {
+        return res.status(400).json({
+          success: false,
+          message: 'Doctor name must be between 2 and 100 characters.',
+        });
+      }
+    }
+
+    if (data.email !== undefined) {
+      const email = String(data.email).trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email) || email.length > 150) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide a valid email address.',
+        });
+      }
+    }
+
+    if (data.phone !== undefined) {
+      const phone = String(data.phone).trim();
+      const phoneRegex = /^\+?[\d\s-]{8,20}$/;
+      if (!phoneRegex.test(phone)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide a valid phone number.',
+        });
+      }
+    }
+
+    if (data.consultationFee !== undefined) {
+      const fee = parseFloat(data.consultationFee);
+      if (isNaN(fee) || fee < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Consultation fee must be a non-negative number.',
+        });
+      }
+    }
+
+    if (data.experienceYears !== undefined) {
+      const exp = parseInt(data.experienceYears, 10);
+      if (isNaN(exp) || exp < 0 || exp > 70) {
+        return res.status(400).json({
+          success: false,
+          message: 'Experience years must be between 0 and 70.',
+        });
+      }
+    }
+
+    if (data.bio !== undefined && data.bio !== null) {
+      const bio = String(data.bio);
+      if (bio.length > 2000) {
+        return res.status(400).json({
+          success: false,
+          message: 'Bio cannot exceed 2000 characters.',
+        });
+      }
+    }
+
+    const result = await doctorService.updateDoctorProfile(req.user.id, data);
+
+    if (result.error === 'DOCTOR_NOT_FOUND') {
+      return res.status(404).json({
+        success: false,
+        message: 'Doctor profile not found.',
+      });
+    }
+
+    if (result.error === 'DUPLICATE_EMAIL') {
+      return res.status(409).json({
+        success: false,
+        message: result.message,
+      });
+    }
+
+    if (result.error === 'DUPLICATE_PHONE') {
+      return res.status(409).json({
+        success: false,
+        message: result.message,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: { profile: result.profile },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Retrieves the authenticated doctor's full recurring weekly schedule.
+ * GET /api/doctor/schedule
+ */
+export async function getSchedule(req, res, next) {
+  try {
+    const result = await doctorService.getDoctorSchedule(req.user.id);
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: 'Doctor profile not found.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: { schedule: result.schedule },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Atomically updates the authenticated doctor's recurring weekly schedule.
+ * PUT /api/doctor/schedule
+ */
+export async function updateSchedule(req, res, next) {
+  try {
+    const scheduleList = Array.isArray(req.body)
+      ? req.body
+      : req.body?.schedule;
+
+    if (!Array.isArray(scheduleList) || scheduleList.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Schedule must be a non-empty array of day configurations.',
+      });
+    }
+
+    const result = await doctorService.updateDoctorSchedule(req.user.id, scheduleList);
+
+    if (result.error === 'DOCTOR_NOT_FOUND') {
+      return res.status(404).json({
+        success: false,
+        message: 'Doctor profile not found.',
+      });
+    }
+
+    if (result.error) {
+      return res.status(400).json({
+        success: false,
+        message: result.message || 'Invalid schedule configuration.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: { schedule: result.schedule },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+

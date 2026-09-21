@@ -345,6 +345,126 @@ export const doctorService = {
     const payload = await response.json();
     return payload.data;
   },
+
+  /**
+   * Retrieves the authenticated doctor's full profile.
+   * GET /api/doctor/profile
+   *
+   * @returns {Promise<object>} { profile }
+   */
+  async getProfile() {
+    const token = localStorage.getItem('auth_token');
+    if (!token) throw new Error('Authentication required.');
+
+    const response = await fetch(`${API_BASE_URL}/doctor/profile`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || `Failed to fetch doctor profile (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const payload = await response.json();
+    return payload.data?.profile || null;
+  },
+
+  /**
+   * Updates the authenticated doctor's editable profile.
+   * PUT /api/doctor/profile
+   *
+   * @param {object} data
+   * @returns {Promise<object>} { profile }
+   */
+  async updateProfile(data) {
+    const token = localStorage.getItem('auth_token');
+    if (!token) throw new Error('Authentication required.');
+
+    const response = await fetch(`${API_BASE_URL}/doctor/profile`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || `Failed to update profile (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const payload = await response.json();
+    return payload.data?.profile || null;
+  },
+
+  /**
+   * Retrieves the authenticated doctor's 7-day recurring weekly schedule.
+   * GET /api/doctor/schedule
+   *
+   * @returns {Promise<Array<object>>} Array of 7 schedule items
+   */
+  async getSchedule() {
+    const token = localStorage.getItem('auth_token');
+    if (!token) throw new Error('Authentication required.');
+
+    const response = await fetch(`${API_BASE_URL}/doctor/schedule`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || `Failed to fetch schedule (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const payload = await response.json();
+    return payload.data?.schedule || [];
+  },
+
+  /**
+   * Updates the authenticated doctor's weekly recurring schedule.
+   * PUT /api/doctor/schedule
+   *
+   * @param {Array<object>} scheduleList
+   * @returns {Promise<Array<object>>} Updated array of schedule items
+   */
+  async updateSchedule(scheduleList) {
+    const token = localStorage.getItem('auth_token');
+    if (!token) throw new Error('Authentication required.');
+
+    const response = await fetch(`${API_BASE_URL}/doctor/schedule`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ schedule: scheduleList }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || `Failed to update schedule (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const payload = await response.json();
+    return payload.data?.schedule || [];
+  },
 };
 
 

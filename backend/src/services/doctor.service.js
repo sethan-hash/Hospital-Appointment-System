@@ -977,4 +977,384 @@ export async function deleteMedication(userId, medicationId) {
   }
 }
 
+/**
+ * Retrieves the full profile of the authenticated doctor.
+ * Combines users (name, email, phone, status) and doctors metadata.
+ * Excludes password_hash and sensitive authentication fields.
+ *
+ * @param {number} userId - From req.user.id (JWT)
+ * @returns {Promise<object|null>}
+ */
+export async function getDoctorProfile(userId) {
+  const [rows] = await pool.query(
+    `SELECT
+       u.id               AS userId,
+       u.full_name        AS fullName,
+       u.full_name        AS name,
+       u.email,
+       u.phone,
+       u.status,
+       d.id               AS doctorId,
+       d.specialization,
+       d.department,
+       d.qualification,
+       d.qualification    AS education,
+       d.hospital_name    AS hospitalName,
+       d.hospital_name    AS clinicName,
+       d.consultation_fee AS consultationFee,
+       d.experience_years AS experienceYears,
+       d.bio,
+       d.is_available     AS isAvailable
+     FROM users u
+     INNER JOIN doctors d ON d.user_id = u.id
+     WHERE u.id = ?
+     LIMIT 1;`,
+    [userId]
+  );
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const r = rows[0];
+  return {
+    userId: r.userId,
+    doctorId: r.doctorId,
+    name: r.name,
+    fullName: r.fullName,
+    email: r.email,
+    phone: r.phone,
+    status: r.status,
+    specialization: r.specialization,
+    department: r.department,
+    qualification: r.qualification,
+    education: r.education,
+    hospitalName: r.hospitalName,
+    clinicName: r.clinicName,
+    consultationFee: parseFloat(r.consultationFee),
+    experienceYears: r.experienceYears,
+    bio: r.bio || '',
+    isAvailable: Boolean(r.isAvailable),
+  };
+}
+
+/**
+ * Updates editable fields on the authenticated doctor's profile and user record.
+ * Executes atomically across users and doctors tables within a transaction.
+ *
+ * @param {number} userId - From req.user.id (JWT)
+ * @param {object} data
+ * @returns {Promise<object>} Updated profile or error object
+ */
+export async function updateDoctorProfile(userId, data = {}) {
+  const existing = await getDoctorProfile(userId);
+  if (!existing) {
+    return { error: 'DOCTOR_NOT_FOUND' };
+  }
+
+  // Check email uniqueness if email is changing
+  if (data.email && data.email.trim().toLowerCase() !== existing.email.toLowerCase()) {
+    const newEmail = data.email.trim().toLowerCase();
+    const [dup] = await pool.query(
+      'SELECT id FROM users WHERE LOWER(email) = ? AND id != ? LIMIT 1;',
+      [newEmail, userId]
+    );
+    if (dup.length > 0) {
+      return { error: 'DUPLICATE_EMAIL', message: 'An account with this email address already exists.' };
+    }
+  }
+
+  // Check phone uniqueness if phone is changing
+  if (data.phone && data.phone.trim() !== existing.phone) {
+    const newPhone = data.phone.trim();
+    const [dup] = await pool.query(
+      'SELECT id FROM users WHERE phone = ? AND id != ? LIMIT 1;',
+      [newPhone, userId]
+    );
+    if (dup.length > 0) {
+      return { error: 'DUPLICATE_PHONE', message: 'An account with this phone number already exists.' };
+    }
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Update users table if user fields provided
+    const userUpdates = [];
+    const userValues = [];
+
+    if (data.name !== undefined || data.fullName !== undefined) {
+      const nameVal = (data.name || data.fullName).trim();
+      userUpdates.push('full_name = ?');
+      userValues.push(nameVal);
+    }
+    if (data.email !== undefined) {
+      userUpdates.push('email = ?');
+      userValues.push(data.email.trim().toLowerCase());
+    }
+    if (data.phone !== undefined) {
+      userUpdates.push('phone = ?');
+      userValues.push(data.phone.trim());
+    }
+
+    if (userUpdates.length > 0) {
+      userValues.push(userId);
+      await connection.query(
+        `UPDATE users SET ${userUpdates.join(', ')} WHERE id = ?;`,
+        userValues
+      );
+    }
+
+    // 2. Update doctors table if doctor fields provided
+    const doctorUpdates = [];
+    const doctorValues = [];
+
+    if (data.specialization !== undefined) {
+      doctorUpdates.push('specialization = ?');
+      doctorValues.push(data.specialization.trim());
+    }
+    if (data.department !== undefined) {
+      doctorUpdates.push('department = ?');
+      doctorValues.push(data.department.trim());
+    }
+    if (data.qualification !== undefined || data.education !== undefined) {
+      doctorUpdates.push('qualification = ?');
+      doctorValues.push((data.qualification || data.education).trim());
+    }
+    if (data.hospitalName !== undefined || data.clinicName !== undefined) {
+      doctorUpdates.push('hospital_name = ?');
+      doctorValues.push((data.hospitalName || data.clinicName).trim());
+    }
+    if (data.consultationFee !== undefined) {
+      doctorUpdates.push('consultation_fee = ?');
+      doctorValues.push(parseFloat(data.consultationFee));
+    }
+    if (data.experienceYears !== undefined) {
+      doctorUpdates.push('experience_years = ?');
+      doctorValues.push(parseInt(data.experienceYears, 10));
+    }
+    if (data.bio !== undefined) {
+      doctorUpdates.push('bio = ?');
+      doctorValues.push(data.bio ? data.bio.trim() : null);
+    }
+    if (data.isAvailable !== undefined) {
+      doctorUpdates.push('is_available = ?');
+      doctorValues.push(data.isAvailable ? 1 : 0);
+    }
+
+    if (doctorUpdates.length > 0) {
+      doctorValues.push(userId);
+      await connection.query(
+        `UPDATE doctors SET ${doctorUpdates.join(', ')} WHERE user_id = ?;`,
+        doctorValues
+      );
+    }
+
+    await connection.commit();
+
+    // Fetch and return the updated profile
+    const updated = await getDoctorProfile(userId);
+    return { profile: updated };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Retrieves the full 7-day recurring schedule for the authenticated doctor.
+ * Returns rows in standard Monday-first order.
+ *
+ * @param {number} userId - From req.user.id (JWT)
+ * @returns {Promise<{ doctorId: number, schedule: object[] }|null>}
+ */
+export async function getDoctorSchedule(userId) {
+  const doctorId = await getDoctorIdByUserId(userId);
+  if (!doctorId) {
+    return null;
+  }
+
+  const [rows] = await pool.query(
+    `SELECT
+       id,
+       day_of_week,
+       start_time,
+       end_time,
+       slot_duration_minutes,
+       is_active
+     FROM doctor_schedules
+     WHERE doctor_id = ?
+     ORDER BY FIELD(day_of_week,
+       'MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY'
+     );`,
+    [doctorId]
+  );
+
+  const rowMap = new Map(rows.map((r) => [r.day_of_week, r]));
+
+  const schedule = DAY_ORDER.map((dayKey) => {
+    const row = rowMap.get(dayKey);
+    if (row) {
+      const startStr = String(row.start_time).slice(0, 5);
+      const endStr = String(row.end_time).slice(0, 5);
+      return {
+        id: row.id,
+        dayOfWeek: row.day_of_week,
+        day: formatDay(row.day_of_week),
+        startTime: startStr,
+        endTime: endStr,
+        slotDurationMinutes: row.slot_duration_minutes,
+        isActive: Boolean(row.is_active),
+        hours: row.is_active ? `${formatTime(row.start_time)} - ${formatTime(row.end_time)}` : 'Unavailable',
+      };
+    }
+    return {
+      id: null,
+      dayOfWeek: dayKey,
+      day: formatDay(dayKey),
+      startTime: '09:00',
+      endTime: '17:00',
+      slotDurationMinutes: 30,
+      isActive: false,
+      hours: 'Unavailable',
+    };
+  });
+
+  return { doctorId, schedule };
+}
+
+/**
+ * Atomically replaces or updates the authenticated doctor's weekly schedule.
+ * Entire multi-row update executes within a single MySQL transaction with rollback on error.
+ *
+ * @param {number} userId - From req.user.id (JWT)
+ * @param {Array<object>} scheduleList - List of schedule entries
+ * @returns {Promise<object>}
+ */
+export async function updateDoctorSchedule(userId, scheduleList) {
+  const doctorId = await getDoctorIdByUserId(userId);
+  if (!doctorId) {
+    return { error: 'DOCTOR_NOT_FOUND' };
+  }
+
+  if (!Array.isArray(scheduleList) || scheduleList.length === 0) {
+    return { error: 'INVALID_SCHEDULE', message: 'Schedule must be a non-empty array of day configurations.' };
+  }
+
+  // Set of seen days to prevent duplicates
+  const seenDays = new Set();
+  const normalizedRows = [];
+
+  for (const item of scheduleList) {
+    if (!item || typeof item !== 'object') {
+      return { error: 'INVALID_SCHEDULE_ROW', message: 'Invalid schedule entry format.' };
+    }
+
+    const dayUpper = String(item.dayOfWeek || item.day || '').trim().toUpperCase();
+    if (!DAY_ORDER.includes(dayUpper)) {
+      return { error: 'INVALID_DAY', message: `Invalid day of week: ${item.dayOfWeek || item.day}` };
+    }
+
+    if (seenDays.has(dayUpper)) {
+      return { error: 'DUPLICATE_DAY', message: `Duplicate schedule entry for day: ${dayUpper}` };
+    }
+    seenDays.add(dayUpper);
+
+    const isActive = Boolean(item.isActive !== undefined ? item.isActive : item.active);
+
+    // Default times if inactive, else validate strictly
+    let startTime = item.startTime ? String(item.startTime).trim() : '09:00';
+    let endTime = item.endTime ? String(item.endTime).trim() : '17:00';
+    let slotDuration = item.slotDurationMinutes ? parseInt(item.slotDurationMinutes, 10) : 30;
+
+    const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
+
+    if (isActive) {
+      if (!timeRegex.test(startTime)) {
+        return { error: 'INVALID_TIME_FORMAT', message: `Invalid start time format for ${dayUpper}: ${startTime}` };
+      }
+      if (!timeRegex.test(endTime)) {
+        return { error: 'INVALID_TIME_FORMAT', message: `Invalid end time format for ${dayUpper}: ${endTime}` };
+      }
+
+      const [sh, sm] = startTime.split(':').map((n) => parseInt(n, 10));
+      const [eh, em] = endTime.split(':').map((n) => parseInt(n, 10));
+      const startMins = sh * 60 + sm;
+      const endMins = eh * 60 + em;
+
+      if (startMins >= endMins) {
+        return {
+          error: 'INVALID_TIME_RANGE',
+          message: `Start time (${startTime}) must be strictly before end time (${endTime}) on ${dayUpper}.`,
+        };
+      }
+
+      if (!slotDuration || slotDuration <= 0 || isNaN(slotDuration)) {
+        return {
+          error: 'INVALID_SLOT_DURATION',
+          message: `Slot duration must be a positive integer on ${dayUpper}.`,
+        };
+      }
+
+      const windowMins = endMins - startMins;
+      if (slotDuration > windowMins) {
+        return {
+          error: 'SLOT_EXCEEDS_WINDOW',
+          message: `Slot duration (${slotDuration}m) cannot exceed working window (${windowMins}m) on ${dayUpper}.`,
+        };
+      }
+    } else {
+      // For inactive days, ensure valid time strings or fall back to standard defaults
+      if (!timeRegex.test(startTime)) startTime = '09:00';
+      if (!timeRegex.test(endTime)) endTime = '17:00';
+      if (!slotDuration || slotDuration <= 0 || isNaN(slotDuration)) slotDuration = 30;
+    }
+
+    // Format as HH:mm:00 for MySQL TIME
+    const formattedStart = startTime.length === 5 ? `${startTime}:00` : startTime;
+    const formattedEnd = endTime.length === 5 ? `${endTime}:00` : endTime;
+
+    normalizedRows.push({
+      doctorId,
+      dayOfWeek: dayUpper,
+      startTime: formattedStart,
+      endTime: formattedEnd,
+      slotDurationMinutes: slotDuration,
+      isActive: isActive ? 1 : 0,
+    });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Remove existing schedules for the doctor
+    await connection.query('DELETE FROM doctor_schedules WHERE doctor_id = ?;', [doctorId]);
+
+    // Insert updated schedules
+    for (const r of normalizedRows) {
+      await connection.query(
+        `INSERT INTO doctor_schedules
+           (doctor_id, day_of_week, start_time, end_time, slot_duration_minutes, is_active)
+         VALUES (?, ?, ?, ?, ?, ?);`,
+        [r.doctorId, r.dayOfWeek, r.startTime, r.endTime, r.slotDurationMinutes, r.isActive]
+      );
+    }
+
+    await connection.commit();
+
+    const refreshed = await getDoctorSchedule(userId);
+    return { success: true, schedule: refreshed?.schedule || [] };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+
 

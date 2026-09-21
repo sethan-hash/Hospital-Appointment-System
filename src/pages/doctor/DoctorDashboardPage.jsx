@@ -7,6 +7,8 @@ import { Icon } from '../../components/common/Icon';
 import { StatCard } from '../../components/patient/StatCard';
 import { Badge } from '../../components/common/Badge';
 import { DoctorAppointmentDetailModal } from '../../components/doctor/DoctorAppointmentDetailModal';
+import { DoctorProfileModal } from '../../components/doctor/DoctorProfileModal';
+import { DoctorScheduleModal } from '../../components/doctor/DoctorScheduleModal';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -104,9 +106,12 @@ export function DoctorDashboardPage() {
   const navigate = useNavigate();
 
   const [dashboard, setDashboard] = useState(null);
+  const [weeklySchedule, setWeeklySchedule] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -125,9 +130,19 @@ export function DoctorDashboardPage() {
     }
   }, []);
 
+  const loadWeeklySchedule = useCallback(async () => {
+    try {
+      const schedule = await doctorService.getSchedule();
+      setWeeklySchedule(schedule || []);
+    } catch {
+      // Graceful fallback
+    }
+  }, []);
+
   useEffect(() => {
     loadDashboard();
-  }, [loadDashboard]);
+    loadWeeklySchedule();
+  }, [loadDashboard, loadWeeklySchedule]);
 
   const handleLogout = () => {
     logout();
@@ -159,9 +174,27 @@ export function DoctorDashboardPage() {
           <Icon name="local_hospital" filled={true} className="text-2xl" />
           <span>MedLink Care — Doctor Portal</span>
         </div>
-        <Button variant="outline" size="sm" onClick={handleLogout}>
-          Sign Out
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            iconLeading="edit"
+            onClick={() => setIsProfileModalOpen(true)}
+          >
+            My Profile
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            iconLeading="schedule"
+            onClick={() => setIsScheduleModalOpen(true)}
+          >
+            Schedule
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleLogout}>
+            Sign Out
+          </Button>
+        </div>
       </header>
 
       <main className="flex-1 max-w-5xl w-full mx-auto p-6 md:p-10 flex flex-col gap-6">
@@ -187,26 +220,49 @@ export function DoctorDashboardPage() {
         {!loading && !error && dashboard && (
           <>
             {/* Doctor Profile Card */}
-            <div className="bg-surface-container-low rounded-2xl p-6 border border-outline-variant/30 flex items-center gap-5">
-              <div className="w-16 h-16 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-xl shrink-0 select-none">
-                {initials}
+            <div className="bg-surface-container-low rounded-2xl p-6 border border-outline-variant/30 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+              <div className="flex items-center gap-5 min-w-0">
+                <div className="w-16 h-16 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-xl shrink-0 select-none">
+                  {initials}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3">
+                    <h1 className="text-2xl font-bold text-on-surface truncate">
+                      Welcome, {doctor.name}
+                    </h1>
+                    {doctor.isAvailable ? (
+                      <Badge variant={AVAIL_VARIANT.true}>Available</Badge>
+                    ) : (
+                      <Badge variant={AVAIL_VARIANT.false}>Unavailable</Badge>
+                    )}
+                  </div>
+                  <p className="text-on-surface-variant text-sm mt-0.5">
+                    {doctor.specialization} · {doctor.department} Dept. · {doctor.hospitalName}
+                  </p>
+                  <p className="text-on-surface-variant text-xs mt-0.5">
+                    {doctor.qualification} · {doctor.experienceYears}+ Years Experience
+                  </p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <h1 className="text-2xl font-bold text-on-surface truncate">
-                  Welcome, {doctor.name}
-                </h1>
-                <p className="text-on-surface-variant text-sm mt-0.5">
-                  {doctor.specialization} · {doctor.department} Dept. · {doctor.hospitalName}
-                </p>
-                <p className="text-on-surface-variant text-xs mt-0.5">
-                  {doctor.qualification} · {doctor.experienceYears}+ Years Experience
-                </p>
+
+              <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  iconLeading="edit"
+                  onClick={() => setIsProfileModalOpen(true)}
+                >
+                  Edit Profile
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  iconLeading="schedule"
+                  onClick={() => setIsScheduleModalOpen(true)}
+                >
+                  Manage Schedule
+                </Button>
               </div>
-              {doctor.isAvailable ? (
-                <Badge variant={AVAIL_VARIANT.true}>Available</Badge>
-              ) : (
-                <Badge variant={AVAIL_VARIANT.false}>Unavailable</Badge>
-              )}
             </div>
 
             {/* Statistics Cards */}
@@ -269,11 +325,80 @@ export function DoctorDashboardPage() {
               </div>
             </div>
 
+            {/* Office Hours & Weekly Schedule Overview Card */}
+            <div className="bg-surface-container-low rounded-2xl border border-outline-variant/30 overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/20">
+                <div className="flex items-center gap-2">
+                  <Icon name="calendar_month" className="text-primary" />
+                  <h2 className="font-title-md font-semibold text-on-surface">
+                    Office Hours & Weekly Schedule
+                  </h2>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  iconLeading="tune"
+                  onClick={() => setIsScheduleModalOpen(true)}
+                >
+                  Configure Hours
+                </Button>
+              </div>
+
+              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
+                {weeklySchedule.map((item) => (
+                  <div
+                    key={item.dayOfWeek}
+                    className={`p-3 rounded-xl border flex flex-col gap-1 transition-colors ${
+                      item.isActive
+                        ? 'bg-surface-container-lowest border-outline-variant/30 shadow-xs'
+                        : 'bg-surface border-transparent opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-label-md font-semibold text-on-surface text-xs">
+                        {item.day}
+                      </span>
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          item.isActive ? 'bg-[#2e7d32]' : 'bg-outline-variant'
+                        }`}
+                      />
+                    </div>
+                    <span className="font-body-sm text-xs text-on-surface-variant font-medium">
+                      {item.isActive ? item.hours : 'Day Off'}
+                    </span>
+                    {item.isActive && item.slotDurationMinutes && (
+                      <span className="text-[10px] text-outline font-medium">
+                        {item.slotDurationMinutes}m slots
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Appointment & Patient Details Modal */}
             <DoctorAppointmentDetailModal
               appointmentId={selectedAppointmentId}
               isOpen={Boolean(selectedAppointmentId)}
               onClose={() => setSelectedAppointmentId(null)}
+            />
+
+            {/* Doctor Profile Modal */}
+            <DoctorProfileModal
+              isOpen={isProfileModalOpen}
+              onClose={() => setIsProfileModalOpen(false)}
+              onProfileUpdated={loadDashboard}
+            />
+
+            {/* Doctor Schedule Modal */}
+            <DoctorScheduleModal
+              isOpen={isScheduleModalOpen}
+              onClose={() => setIsScheduleModalOpen(false)}
+              onScheduleUpdated={(newSchedule) => {
+                setWeeklySchedule(newSchedule);
+                loadDashboard();
+              }}
             />
           </>
         )}
