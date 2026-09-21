@@ -101,7 +101,7 @@ async function runTests() {
     ]);
 
     const patientToken = (await p1Res.json()).data?.token;
-    const patient2Token = (await p2Res.json()).data?.token;
+    const _patient2Token = (await p2Res.json()).data?.token;
     const doctor1Token = (await d1Res.json()).data?.token;
     const doctor2Token = (await d2Res.json()).data?.token;
 
@@ -427,7 +427,7 @@ async function runTests() {
       headers: authH(doctor1Token),
       body: JSON.stringify({ schedule: fullWeek }),
     });
-    const atomicData = await atomicRes.json();
+    const _atomicData = await atomicRes.json();
     const [atomicDb] = await pool.query(
       'SELECT COUNT(*) AS cnt FROM doctor_schedules WHERE doctor_id = 1;'
     );

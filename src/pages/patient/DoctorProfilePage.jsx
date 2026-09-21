@@ -8,6 +8,7 @@ import { Icon } from '../../components/common/Icon';
 import { RatingStars } from '../../components/common/RatingStars';
 import { useDoctor } from '../../hooks/useDoctor';
 import { useDoctorAvailability } from '../../hooks/useDoctorAvailability';
+import { useDoctorReviews } from '../../hooks/useDoctorReviews';
 import { formatRating } from '../../utils/formatters';
 
 export function DoctorProfilePage() {
@@ -15,6 +16,7 @@ export function DoctorProfilePage() {
   const navigate = useNavigate();
   const { doctor, loading } = useDoctor(id);
   const { schedule, loading: scheduleLoading, error: scheduleError } = useDoctorAvailability(id);
+  const { reviews, averageRating, reviewCount, loading: reviewsLoading, error: reviewsError } = useDoctorReviews(id);
 
   if (loading) {
     return (
@@ -192,23 +194,33 @@ export function DoctorProfilePage() {
                 <Icon name="star" filled={true} className="text-secondary" /> Patient Reviews
               </h2>
 
-              <div className="flex flex-col items-center justify-center my-4">
-                <h3 className="text-5xl font-bold text-on-surface leading-none">
-                  {formatRating(doctor.rating)}
-                </h3>
-                <RatingStars rating={doctor.rating} className="my-2" />
-                <p className="text-body-sm text-on-surface-variant">
-                  Based on {doctor.reviewCount} verified reviews
-                </p>
-              </div>
+              {reviewsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Icon name="progress_activity" className="animate-spin text-2xl text-primary" />
+                </div>
+              ) : reviewsError ? (
+                <p className="text-body-sm text-error text-center py-4">Unable to load reviews.</p>
+              ) : (
+                <div className="flex flex-col items-center justify-center my-4">
+                  <h3 className="text-5xl font-bold text-on-surface leading-none">
+                    {reviewCount > 0 ? formatRating(averageRating) : '—'}
+                  </h3>
+                  {reviewCount > 0 && <RatingStars rating={averageRating} className="my-2" />}
+                  <p className="text-body-sm text-on-surface-variant">
+                    {reviewCount > 0
+                      ? `Based on ${reviewCount} verified review${reviewCount !== 1 ? 's' : ''}`
+                      : 'No reviews yet'}
+                  </p>
+                </div>
+              )}
 
-              {doctor.reviews?.length > 0 && (
+              {!reviewsLoading && !reviewsError && reviews.length > 0 && (
                 <div className="bg-surface-container-low p-4 rounded-lg mt-4">
                   <p className="text-body-sm italic text-on-surface-variant mb-2">
-                    "{doctor.reviews[0].comment}"
+                    "{reviews[0].comment}"
                   </p>
                   <p className="text-xs font-medium text-outline text-right">
-                    - {doctor.reviews[0].author}, {doctor.reviews[0].date}
+                    - {reviews[0].author}, {reviews[0].date}
                   </p>
                 </div>
               )}

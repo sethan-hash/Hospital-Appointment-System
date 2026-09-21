@@ -707,3 +707,82 @@ export async function updateSchedule(req, res, next) {
   }
 }
 
+/**
+ * Retrieves all reviews for a doctor.
+ * Accessible by any authenticated user (PATIENT or DOCTOR) — used by DoctorProfilePage
+ * and BookAppointmentPage.
+ * GET /api/doctors/:id/reviews
+ */
+export async function getReviews(req, res, next) {
+  try {
+    const doctorId = parseInt(req.params.id, 10);
+    if (isNaN(doctorId) || doctorId <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid doctor ID.' });
+    }
+
+    const result = await doctorService.getDoctorReviews(doctorId);
+
+    if (!result.doctorExists) {
+      return res.status(404).json({ success: false, message: 'Doctor not found.' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        reviews: result.reviews,
+        averageRating: result.averageRating,
+        reviewCount: result.reviewCount,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Submits a new patient review for a doctor.
+ * PATIENT only — identity derived from JWT (req.user.id).
+ * POST /api/doctors/:id/reviews
+ */
+export async function submitReview(req, res, next) {
+  try {
+    const doctorId = parseInt(req.params.id, 10);
+    if (isNaN(doctorId) || doctorId <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid doctor ID.' });
+    }
+
+    const { rating, comment, appointmentId } = req.body;
+
+    if (rating === undefined || rating === null) {
+      return res.status(400).json({ success: false, message: 'rating is required.' });
+    }
+
+    const result = await doctorService.createDoctorReview({
+      patientUserId: req.user.id,
+      doctorId,
+      rating,
+      comment: comment ?? null,
+      appointmentId: appointmentId ?? null,
+    });
+
+    if (result.error) {
+      const statusMap = {
+        INVALID_RATING: 400,
+        COMMENT_TOO_LONG: 400,
+        INVALID_APPOINTMENT: 400,
+        PATIENT_NOT_FOUND: 404,
+        DOCTOR_NOT_FOUND: 404,
+        APPOINTMENT_NOT_FOUND: 404,
+        APPOINTMENT_NOT_COMPLETED: 422,
+        NO_ELIGIBLE_APPOINTMENT: 422,
+        DUPLICATE_REVIEW: 409,
+      };
+      const status = statusMap[result.error] || 400;
+      return res.status(status).json({ success: false, message: result.message });
+    }
+
+    return res.status(201).json({ success: true, data: { review: result.review } });
+  } catch (error) {
+    next(error);
+  }
+}

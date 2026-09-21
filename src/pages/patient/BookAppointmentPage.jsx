@@ -9,6 +9,7 @@ import { DatePickerStrip } from '../../components/patient/DatePickerStrip';
 import { TimeSlotPicker } from '../../components/patient/TimeSlotPicker';
 import { useDoctor } from '../../hooks/useDoctor';
 import { useDoctorAvailability } from '../../hooks/useDoctorAvailability';
+import { useDoctorReviews } from '../../hooks/useDoctorReviews';
 import { useAppointments } from '../../hooks/useAppointments';
 import { formatRating } from '../../utils/formatters';
 
@@ -19,6 +20,7 @@ export function BookAppointmentPage() {
 
   const { doctor, loading } = useDoctor(doctorId || 'doc-1');
   const { schedule } = useDoctorAvailability(doctorId);
+  const { reviews, averageRating, reviewCount } = useDoctorReviews(doctorId);
 
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split('T')[0]
@@ -176,7 +178,7 @@ export function BookAppointmentPage() {
               </div>
               <div className="absolute -bottom-2 -right-2 bg-secondary text-on-secondary px-2.5 py-0.5 rounded-full font-label-md text-label-md flex items-center gap-1 shadow-sm">
                 <Icon name="star" filled={true} className="text-[14px]" />
-                <span>{formatRating(doctor.rating)}</span>
+                <span>{reviewCount > 0 ? formatRating(averageRating) : '—'}</span>
               </div>
             </div>
           </div>
@@ -262,7 +264,7 @@ export function BookAppointmentPage() {
         </section>
 
         {/* Patient Review Snippet */}
-        {doctor.reviews?.length > 0 && (
+        {reviews.length > 0 && (
           <section className="space-y-3 pt-2">
             <div className="flex justify-between items-center">
               <h3 className="font-headline-sm text-headline-sm text-on-surface font-semibold">
@@ -277,22 +279,22 @@ export function BookAppointmentPage() {
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 bg-tertiary-fixed rounded-full flex items-center justify-center text-on-tertiary-fixed font-headline-sm font-bold text-sm">
-                    {doctor.reviews[0].initials}
+                    {reviews[0].initials}
                   </div>
                   <div>
                     <p className="font-label-lg text-label-lg text-on-surface font-semibold">
-                      {doctor.reviews[0].author}
+                      {reviews[0].author}
                     </p>
                     <p className="font-label-md text-label-md text-on-surface-variant text-[11px]">
-                      {doctor.reviews[0].date}
+                      {reviews[0].date}
                     </p>
                   </div>
                 </div>
 
-                <RatingStars rating={doctor.reviews[0].rating} size="md" />
+                <RatingStars rating={reviews[0].rating} size="md" />
               </div>
               <p className="font-body-sm text-body-sm text-on-surface-variant">
-                "{doctor.reviews[0].comment}"
+                "{reviews[0].comment}"
               </p>
             </div>
           </section>

@@ -50,8 +50,10 @@ function normalizeDoctorRow(row) {
     experienceYears: row.experienceYears,
     bio: row.bio || '',
     isAvailable: Boolean(row.isAvailable),
-    // rating/reviews: no DB columns yet — defaults shown until reviews feature is built
-    rating: 4.8,
+    // rating/reviewCount/reviews: fetched separately via GET /api/doctors/:id/reviews
+    // Consumers (DoctorProfilePage, BookAppointmentPage) should call the reviews endpoint
+    // to get real averageRating, reviewCount, and the reviews array.
+    rating: null,
     reviewCount: 0,
     reviews: [],
     // image: no DB column — DoctorCard/DoctorProfilePage handle null with a placeholder
@@ -1357,4 +1359,196 @@ export async function updateDoctorSchedule(userId, scheduleList) {
 }
 
 
+// ============================================================================
+//  REVIEWS
+// ============================================================================
 
+/**
+ * Retrieves all reviews for a doctor, ordered newest first.
+ * Also computes average rating and total count.
+ * Never exposes password_hash or auth secrets.
+ *
+ * @param {number|string} doctorId  - doctors.id (NOT user_id)
+ * @returns {Promise<{ doctorExists: boolean, reviews: object[], averageRating: number|null, reviewCount: number }>}
+ */
+export async function getDoctorReviews(doctorId) {
+  const doctor = await getDoctorById(doctorId);
+  if (!doctor) {
+    return { doctorExists: false, reviews: [], averageRating: null, reviewCount: 0 };
+  }
+
+  const [rows] = await pool.query(
+    `SELECT
+       r.id,
+       r.rating,
+       r.comment,
+       r.created_at  AS createdAt,
+       u.full_name   AS authorName
+     FROM reviews r
+     INNER JOIN patients  pt ON pt.id = r.patient_id
+     INNER JOIN users     u  ON u.id  = pt.user_id
+     WHERE r.doctor_id = ?
+     ORDER BY r.created_at DESC;`,
+    [doctorId]
+  );
+
+  const [aggRows] = await pool.query(
+    `SELECT ROUND(AVG(rating), 2) AS averageRating, COUNT(*) AS reviewCount
+     FROM reviews WHERE doctor_id = ?;`,
+    [doctorId]
+  );
+
+  const averageRating =
+    aggRows[0]?.averageRating != null ? parseFloat(aggRows[0].averageRating) : null;
+  const reviewCount = Number(aggRows[0]?.reviewCount || 0);
+
+  const reviews = rows.map((r) => {
+    const name = r.authorName || 'Anonymous';
+    const initials = name
+      .split(' ')
+      .map((w) => w[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+    const date = new Date(r.createdAt).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    return { id: r.id, rating: r.rating, comment: r.comment || '', author: name, initials, date };
+  });
+
+  return { doctorExists: true, reviews, averageRating, reviewCount };
+}
+
+/**
+ * Creates a new review for a doctor from an authenticated patient.
+ *
+ * Enforcement:
+ *  - Patient identity from patientUserId (JWT) only — never a client param.
+ *  - Patient must have a COMPLETED appointment with the doctor.
+ *  - One review per COMPLETED appointment (app-level de-dup).
+ *  - Rating: integer 1–5.
+ *  - Comment: optional, max 1000 chars.
+ *
+ * @param {object} params
+ * @param {number} params.patientUserId   - users.id from JWT
+ * @param {number} params.doctorId        - doctors.id from route param
+ * @param {number} params.rating          - integer 1–5
+ * @param {string} [params.comment]       - optional
+ * @param {number} [params.appointmentId] - optional; validated if supplied
+ * @returns {Promise<{ error?: string, message?: string, success?: boolean, review?: object }>}
+ */
+export async function createDoctorReview({
+  patientUserId,
+  doctorId,
+  rating,
+  comment = null,
+  appointmentId = null,
+}) {
+  const ratingInt = parseInt(rating, 10);
+  if (isNaN(ratingInt) || ratingInt < 1 || ratingInt > 5) {
+    return { error: 'INVALID_RATING', message: 'Rating must be an integer between 1 and 5.' };
+  }
+
+  if (comment !== null && comment !== undefined) {
+    comment = String(comment).trim();
+    if (comment.length > 1000) {
+      return { error: 'COMMENT_TOO_LONG', message: 'Comment must not exceed 1000 characters.' };
+    }
+    if (comment.length === 0) comment = null;
+  }
+
+  const [patientRows] = await pool.query(
+    'SELECT id FROM patients WHERE user_id = ? LIMIT 1;',
+    [patientUserId]
+  );
+  if (patientRows.length === 0) {
+    return { error: 'PATIENT_NOT_FOUND', message: 'Patient profile not found.' };
+  }
+  const patientId = patientRows[0].id;
+
+  const doctor = await getDoctorById(doctorId);
+  if (!doctor) {
+    return { error: 'DOCTOR_NOT_FOUND', message: 'Doctor not found.' };
+  }
+
+  let resolvedAppointmentId = null;
+
+  if (appointmentId) {
+    const apptId = parseInt(appointmentId, 10);
+    if (isNaN(apptId)) {
+      return { error: 'INVALID_APPOINTMENT', message: 'Invalid appointment ID.' };
+    }
+    const [apptRows] = await pool.query(
+      `SELECT id, status FROM appointments
+       WHERE id = ? AND patient_id = ? AND doctor_id = ? LIMIT 1;`,
+      [apptId, patientId, doctorId]
+    );
+    if (apptRows.length === 0) {
+      return {
+        error: 'APPOINTMENT_NOT_FOUND',
+        message: 'Appointment not found or does not belong to this patient/doctor.',
+      };
+    }
+    if (apptRows[0].status !== 'COMPLETED') {
+      return {
+        error: 'APPOINTMENT_NOT_COMPLETED',
+        message: 'You can only review a doctor after a COMPLETED appointment.',
+      };
+    }
+    const [existingForAppt] = await pool.query(
+      'SELECT id FROM reviews WHERE appointment_id = ? AND patient_id = ? LIMIT 1;',
+      [apptId, patientId]
+    );
+    if (existingForAppt.length > 0) {
+      return {
+        error: 'DUPLICATE_REVIEW',
+        message: 'You have already submitted a review for this appointment.',
+      };
+    }
+    resolvedAppointmentId = apptId;
+  } else {
+    const [eligible] = await pool.query(
+      `SELECT a.id FROM appointments a
+       LEFT JOIN reviews r ON r.appointment_id = a.id AND r.patient_id = ?
+       WHERE a.patient_id = ? AND a.doctor_id = ? AND a.status = 'COMPLETED' AND r.id IS NULL
+       ORDER BY a.appointment_date DESC LIMIT 1;`,
+      [patientId, patientId, doctorId]
+    );
+    if (eligible.length === 0) {
+      return {
+        error: 'NO_ELIGIBLE_APPOINTMENT',
+        message:
+          'You must have a completed, unreviewed appointment with this doctor to leave a review.',
+      };
+    }
+    resolvedAppointmentId = eligible[0].id;
+  }
+
+  const [result] = await pool.query(
+    'INSERT INTO reviews (patient_id, doctor_id, appointment_id, rating, comment) VALUES (?, ?, ?, ?, ?);',
+    [patientId, doctorId, resolvedAppointmentId, ratingInt, comment]
+  );
+
+  const [created] = await pool.query(
+    `SELECT r.id, r.rating, r.comment, r.created_at AS createdAt, u.full_name AS authorName
+     FROM reviews r
+     INNER JOIN patients pt ON pt.id = r.patient_id
+     INNER JOIN users    u  ON u.id  = pt.user_id
+     WHERE r.id = ?;`,
+    [result.insertId]
+  );
+
+  const row = created[0];
+  const name = row.authorName || 'Anonymous';
+  const initials = name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
+  const date = new Date(row.createdAt).toLocaleDateString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+
+  return {
+    success: true,
+    review: { id: row.id, rating: row.rating, comment: row.comment || '', author: name, initials, date },
+  };
+}

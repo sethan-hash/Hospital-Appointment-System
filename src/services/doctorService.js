@@ -465,6 +465,75 @@ export const doctorService = {
     const payload = await response.json();
     return payload.data?.schedule || [];
   },
+
+  /**
+   * Retrieves all reviews for a doctor, plus averageRating and reviewCount.
+   * Maps to GET /api/doctors/:id/reviews
+   * Accessible by any authenticated role.
+   *
+   * @param {string|number} id - Doctor's database ID (doctors.id)
+   * @returns {Promise<{ reviews: object[], averageRating: number|null, reviewCount: number }>}
+   */
+  async getDoctorReviews(id) {
+    const token = authService.getToken();
+    if (!token) return { reviews: [], averageRating: null, reviewCount: 0 };
+
+    const response = await fetch(`${API_BASE_URL}/doctors/${id}/reviews`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) return { reviews: [], averageRating: null, reviewCount: 0 };
+      if (response.status === 401 || response.status === 403)
+        return { reviews: [], averageRating: null, reviewCount: 0 };
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Failed to fetch reviews (${response.status})`);
+    }
+
+    const payload = await response.json();
+    return {
+      reviews: payload.data?.reviews || [],
+      averageRating: payload.data?.averageRating ?? null,
+      reviewCount: payload.data?.reviewCount ?? 0,
+    };
+  },
+
+  /**
+   * Submits a new review for a doctor from the authenticated patient.
+   * Maps to POST /api/doctors/:id/reviews
+   *
+   * @param {string|number} id           - Doctor's database ID
+   * @param {object}        data
+   * @param {number}        data.rating         - integer 1–5
+   * @param {string}        [data.comment]      - optional text ≤ 1000 chars
+   * @param {number}        [data.appointmentId] - optional appointment linkage
+   * @returns {Promise<object>} The created review
+   */
+  async submitDoctorReview(id, data) {
+    const token = authService.getToken();
+    if (!token) throw new Error('Authentication required.');
+
+    const response = await fetch(`${API_BASE_URL}/doctors/${id}/reviews`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || `Failed to submit review (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const payload = await response.json();
+    return payload.data?.review || null;
+  },
 };
-
-
