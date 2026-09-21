@@ -179,5 +179,172 @@ export const doctorService = {
     const payload = await response.json();
     return payload.data || null;
   },
+
+  /**
+   * Retrieves the clinical record, vitals, and medications for an appointment.
+   * GET /api/doctor/appointments/:appointmentId/clinical-record
+   */
+  async getClinicalRecord(appointmentId) {
+    const token = localStorage.getItem('auth_token');
+    if (!token) throw new Error('Authentication required.');
+
+    const response = await fetch(`${API_BASE_URL}/doctor/appointments/${appointmentId}/clinical-record`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || `Failed to fetch clinical record (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const payload = await response.json();
+    return payload.data;
+  },
+
+  /**
+   * Creates or updates the clinical consultation record (diagnosis, treatmentPlan, doctorNotes).
+   * PUT /api/doctor/appointments/:appointmentId/clinical-record
+   */
+  async saveClinicalRecord(appointmentId, data) {
+    const token = localStorage.getItem('auth_token');
+    if (!token) throw new Error('Authentication required.');
+
+    const response = await fetch(`${API_BASE_URL}/doctor/appointments/${appointmentId}/clinical-record`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || `Failed to save clinical record (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const payload = await response.json();
+    return payload.data;
+  },
+
+  /**
+   * Creates or updates physiological vitals for an appointment.
+   * PUT /api/doctor/appointments/:appointmentId/vitals
+   */
+  async saveVitals(appointmentId, data) {
+    const token = localStorage.getItem('auth_token');
+    if (!token) throw new Error('Authentication required.');
+
+    const response = await fetch(`${API_BASE_URL}/doctor/appointments/${appointmentId}/vitals`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || `Failed to save vitals (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const payload = await response.json();
+    return payload.data;
+  },
+
+  /**
+   * Adds a prescribed medication to a clinical record.
+   * POST /api/doctor/medical-records/:recordId/medications
+   */
+  async addMedication(recordId, data) {
+    const token = localStorage.getItem('auth_token');
+    if (!token) throw new Error('Authentication required.');
+
+    const response = await fetch(`${API_BASE_URL}/doctor/medical-records/${recordId}/medications`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || `Failed to add medication (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const payload = await response.json();
+    return payload.data;
+  },
+
+  /**
+   * Updates an existing medication prescription.
+   * PUT /api/doctor/medications/:id
+   */
+  async updateMedication(id, data) {
+    const token = localStorage.getItem('auth_token');
+    if (!token) throw new Error('Authentication required.');
+
+    const response = await fetch(`${API_BASE_URL}/doctor/medications/${id}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || `Failed to update medication (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const payload = await response.json();
+    return payload.data;
+  },
+
+  /**
+   * Deletes a medication prescription.
+   * DELETE /api/doctor/medications/:id
+   */
+  async deleteMedication(id) {
+    const token = localStorage.getItem('auth_token');
+    if (!token) throw new Error('Authentication required.');
+
+    const response = await fetch(`${API_BASE_URL}/doctor/medications/${id}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || `Failed to delete medication (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const payload = await response.json();
+    return payload.data;
+  },
 };
+
 

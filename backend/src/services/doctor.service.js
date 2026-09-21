@@ -428,3 +428,553 @@ export async function getDoctorAppointmentDetails(userId, appointmentId) {
   };
 }
 
+/**
+ * Retrieves the clinical record, vitals, and medications for an appointment belonging to the doctor.
+ * Enforces doctor ownership: appointment must belong to the authenticated doctor.
+ *
+ * @param {number} userId - From req.user.id (JWT)
+ * @param {number} appointmentId - Target appointment
+ * @returns {Promise<object|null>}
+ */
+export async function getClinicalRecordByAppointmentId(userId, appointmentId) {
+  const doctorId = await getDoctorIdByUserId(userId);
+  if (!doctorId) {
+    return { error: 'DOCTOR_NOT_FOUND' };
+  }
+
+  // 1. Verify doctor owns the appointment
+  const [apptRows] = await pool.query(
+    `SELECT id, patient_id, appointment_date
+     FROM appointments
+     WHERE id = ? AND doctor_id = ?
+     LIMIT 1;`,
+    [appointmentId, doctorId]
+  );
+
+  if (apptRows.length === 0) {
+    return { error: 'APPOINTMENT_NOT_FOUND' };
+  }
+
+  const appt = apptRows[0];
+
+  // 2. Fetch medical record for this appointment & doctor
+  const [recordRows] = await pool.query(
+    `SELECT
+       id,
+       patient_id,
+       doctor_id,
+       appointment_id,
+       diagnosis,
+       treatment_plan AS treatmentPlan,
+       doctor_notes   AS doctorNotes,
+       DATE_FORMAT(visit_date, '%Y-%m-%d') AS visitDate,
+       created_at     AS createdAt,
+       updated_at     AS updatedAt
+     FROM medical_records
+     WHERE appointment_id = ? AND doctor_id = ?
+     LIMIT 1;`,
+    [appointmentId, doctorId]
+  );
+
+  const record = recordRows.length > 0 ? recordRows[0] : null;
+
+  // 3. Fetch vitals for this appointment
+  const [vitalsRows] = await pool.query(
+    `SELECT
+       id,
+       patient_id,
+       appointment_id,
+       recorded_at AS recordedAt,
+       blood_pressure_systolic  AS bloodPressureSystolic,
+       blood_pressure_diastolic AS bloodPressureDiastolic,
+       heart_rate_bpm           AS heartRateBpm,
+       respiratory_rate_bpm     AS respiratoryRateBpm,
+       temperature_celsius      AS temperatureCelsius,
+       spo2_percentage          AS spo2Percentage,
+       weight_kg                AS weightKg,
+       height_cm                AS heightCm,
+       bmi,
+       notes
+     FROM vitals
+     WHERE appointment_id = ?
+     LIMIT 1;`,
+    [appointmentId]
+  );
+
+  const vitalsRow = vitalsRows.length > 0 ? vitalsRows[0] : null;
+  const vitals = vitalsRow
+    ? {
+        ...vitalsRow,
+        bloodPressure:
+          vitalsRow.bloodPressureSystolic && vitalsRow.bloodPressureDiastolic
+            ? `${vitalsRow.bloodPressureSystolic}/${vitalsRow.bloodPressureDiastolic}`
+            : null,
+        temperatureCelsius: vitalsRow.temperatureCelsius != null ? Number(vitalsRow.temperatureCelsius) : null,
+        spo2Percentage: vitalsRow.spo2Percentage != null ? Number(vitalsRow.spo2Percentage) : null,
+        weightKg: vitalsRow.weightKg != null ? Number(vitalsRow.weightKg) : null,
+        heightCm: vitalsRow.heightCm != null ? Number(vitalsRow.heightCm) : null,
+        bmi: vitalsRow.bmi != null ? Number(vitalsRow.bmi) : null,
+      }
+    : null;
+
+  // 4. Fetch medications if medical record exists
+  let medications = [];
+  if (record) {
+    const [medRows] = await pool.query(
+      `SELECT
+         id,
+         medical_record_id AS medicalRecordId,
+         medicine_name     AS medicineName,
+         dosage,
+         frequency,
+         duration,
+         instructions,
+         created_at        AS createdAt
+       FROM medications
+       WHERE medical_record_id = ?
+       ORDER BY id ASC;`,
+      [record.id]
+    );
+    medications = medRows;
+  }
+
+  return {
+    appointmentId: appt.id,
+    patientId: appt.patient_id,
+    record,
+    vitals,
+    medications,
+  };
+}
+
+/**
+ * Creates or updates the clinical consultation record (diagnosis, treatment plan, doctor notes)
+ * for a specific appointment belonging to the authenticated doctor.
+ * Uses a MySQL transaction.
+ *
+ * @param {number} userId - From req.user.id (JWT)
+ * @param {number} appointmentId - Target appointment
+ * @param {object} clinicalData - { diagnosis, treatmentPlan, doctorNotes }
+ * @returns {Promise<object>}
+ */
+export async function saveClinicalRecord(userId, appointmentId, clinicalData) {
+  const doctorId = await getDoctorIdByUserId(userId);
+  if (!doctorId) {
+    return { error: 'DOCTOR_NOT_FOUND' };
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Verify doctor owns the appointment
+    const [apptRows] = await connection.query(
+      `SELECT id, patient_id, appointment_date
+       FROM appointments
+       WHERE id = ? AND doctor_id = ?
+       LIMIT 1;`,
+      [appointmentId, doctorId]
+    );
+
+    if (apptRows.length === 0) {
+      await connection.rollback();
+      return { error: 'APPOINTMENT_NOT_FOUND' };
+    }
+
+    const appt = apptRows[0];
+    const { diagnosis, treatmentPlan = null, doctorNotes = null } = clinicalData;
+
+    // 2. Check if a medical record already exists for this appointment
+    const [existingRecord] = await connection.query(
+      `SELECT id FROM medical_records
+       WHERE appointment_id = ? AND doctor_id = ?
+       LIMIT 1;`,
+      [appointmentId, doctorId]
+    );
+
+    let recordId;
+    if (existingRecord.length > 0) {
+      recordId = existingRecord[0].id;
+      await connection.query(
+        `UPDATE medical_records
+         SET diagnosis = ?,
+             treatment_plan = ?,
+             doctor_notes = ?,
+             updated_at = NOW()
+         WHERE id = ? AND doctor_id = ?;`,
+        [diagnosis, treatmentPlan, doctorNotes, recordId, doctorId]
+      );
+    } else {
+      const [insertResult] = await connection.query(
+        `INSERT INTO medical_records
+           (patient_id, doctor_id, appointment_id, diagnosis, treatment_plan, doctor_notes, visit_date, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW());`,
+        [appt.patient_id, doctorId, appt.id, diagnosis, treatmentPlan, doctorNotes, appt.appointment_date]
+      );
+      recordId = insertResult.insertId;
+    }
+
+    // 3. Fetch the updated/created record
+    const [savedRows] = await connection.query(
+      `SELECT
+         id,
+         patient_id,
+         doctor_id,
+         appointment_id,
+         diagnosis,
+         treatment_plan AS treatmentPlan,
+         doctor_notes   AS doctorNotes,
+         DATE_FORMAT(visit_date, '%Y-%m-%d') AS visitDate,
+         created_at     AS createdAt,
+         updated_at     AS updatedAt
+       FROM medical_records
+       WHERE id = ?;`,
+      [recordId]
+    );
+
+    await connection.commit();
+    return { record: savedRows[0] };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Creates or updates vitals for an appointment belonging to the authenticated doctor.
+ * Uses a MySQL transaction.
+ *
+ * @param {number} userId - From req.user.id (JWT)
+ * @param {number} appointmentId - Target appointment
+ * @param {object} vitalsData - Physiological measurements
+ * @returns {Promise<object>}
+ */
+export async function saveVitals(userId, appointmentId, vitalsData) {
+  const doctorId = await getDoctorIdByUserId(userId);
+  if (!doctorId) {
+    return { error: 'DOCTOR_NOT_FOUND' };
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Verify doctor owns the appointment
+    const [apptRows] = await connection.query(
+      `SELECT id, patient_id
+       FROM appointments
+       WHERE id = ? AND doctor_id = ?
+       LIMIT 1;`,
+      [appointmentId, doctorId]
+    );
+
+    if (apptRows.length === 0) {
+      await connection.rollback();
+      return { error: 'APPOINTMENT_NOT_FOUND' };
+    }
+
+    const patientId = apptRows[0].patient_id;
+
+    // Calculate BMI if weight and height are provided but BMI is not
+    let calculatedBmi = vitalsData.bmi != null ? vitalsData.bmi : null;
+    if (
+      calculatedBmi == null &&
+      vitalsData.weightKg != null &&
+      vitalsData.heightCm != null &&
+      Number(vitalsData.heightCm) > 0
+    ) {
+      const hMeters = Number(vitalsData.heightCm) / 100;
+      calculatedBmi = parseFloat((Number(vitalsData.weightKg) / (hMeters * hMeters)).toFixed(1));
+    }
+
+    // 2. Check if vitals record already exists for this appointment
+    const [existingVitals] = await connection.query(
+      `SELECT id FROM vitals WHERE appointment_id = ? LIMIT 1;`,
+      [appointmentId]
+    );
+
+    let vitalsId;
+    if (existingVitals.length > 0) {
+      vitalsId = existingVitals[0].id;
+      await connection.query(
+        `UPDATE vitals
+         SET blood_pressure_systolic  = ?,
+             blood_pressure_diastolic = ?,
+             heart_rate_bpm           = ?,
+             respiratory_rate_bpm     = ?,
+             temperature_celsius      = ?,
+             spo2_percentage          = ?,
+             weight_kg                = ?,
+             height_cm                = ?,
+             bmi                      = ?,
+             notes                    = ?,
+             recorded_at              = NOW()
+         WHERE id = ?;`,
+        [
+          vitalsData.bloodPressureSystolic ?? null,
+          vitalsData.bloodPressureDiastolic ?? null,
+          vitalsData.heartRateBpm ?? null,
+          vitalsData.respiratoryRateBpm ?? null,
+          vitalsData.temperatureCelsius ?? null,
+          vitalsData.spo2Percentage ?? null,
+          vitalsData.weightKg ?? null,
+          vitalsData.heightCm ?? null,
+          calculatedBmi,
+          vitalsData.notes ?? null,
+          vitalsId,
+        ]
+      );
+    } else {
+      const [insertResult] = await connection.query(
+        `INSERT INTO vitals
+           (patient_id, appointment_id, recorded_at,
+            blood_pressure_systolic, blood_pressure_diastolic,
+            heart_rate_bpm, respiratory_rate_bpm,
+            temperature_celsius, spo2_percentage,
+            weight_kg, height_cm, bmi, notes)
+         VALUES (?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          patientId,
+          appointmentId,
+          vitalsData.bloodPressureSystolic ?? null,
+          vitalsData.bloodPressureDiastolic ?? null,
+          vitalsData.heartRateBpm ?? null,
+          vitalsData.respiratoryRateBpm ?? null,
+          vitalsData.temperatureCelsius ?? null,
+          vitalsData.spo2Percentage ?? null,
+          vitalsData.weightKg ?? null,
+          vitalsData.heightCm ?? null,
+          calculatedBmi,
+          vitalsData.notes ?? null,
+        ]
+      );
+      vitalsId = insertResult.insertId;
+    }
+
+    // 3. Fetch updated vitals
+    const [savedRows] = await connection.query(
+      `SELECT
+         id,
+         patient_id,
+         appointment_id,
+         recorded_at AS recordedAt,
+         blood_pressure_systolic  AS bloodPressureSystolic,
+         blood_pressure_diastolic AS bloodPressureDiastolic,
+         heart_rate_bpm           AS heartRateBpm,
+         respiratory_rate_bpm     AS respiratoryRateBpm,
+         temperature_celsius      AS temperatureCelsius,
+         spo2_percentage          AS spo2Percentage,
+         weight_kg                AS weightKg,
+         height_cm                AS heightCm,
+         bmi,
+         notes
+       FROM vitals
+       WHERE id = ?;`,
+      [vitalsId]
+    );
+
+    await connection.commit();
+
+    const v = savedRows[0];
+    return {
+      vitals: {
+        ...v,
+        bloodPressure:
+          v.bloodPressureSystolic && v.bloodPressureDiastolic
+            ? `${v.bloodPressureSystolic}/${v.bloodPressureDiastolic}`
+            : null,
+        temperatureCelsius: v.temperatureCelsius != null ? Number(v.temperatureCelsius) : null,
+        spo2Percentage: v.spo2Percentage != null ? Number(v.spo2Percentage) : null,
+        weightKg: v.weightKg != null ? Number(v.weightKg) : null,
+        heightCm: v.heightCm != null ? Number(v.heightCm) : null,
+        bmi: v.bmi != null ? Number(v.bmi) : null,
+      },
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Adds a prescribed medication to a medical record belonging to the authenticated doctor.
+ * Ownership: medical_records.doctor_id must match authenticated doctor.
+ * Uses a MySQL transaction.
+ *
+ * @param {number} userId - From req.user.id (JWT)
+ * @param {number} recordId - Target medical_records.id
+ * @param {object} medData - { medicineName, dosage, frequency, duration, instructions }
+ * @returns {Promise<object>}
+ */
+export async function addMedication(userId, recordId, medData) {
+  const doctorId = await getDoctorIdByUserId(userId);
+  if (!doctorId) {
+    return { error: 'DOCTOR_NOT_FOUND' };
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Verify doctor owns the medical record
+    const [recRows] = await connection.query(
+      `SELECT id FROM medical_records WHERE id = ? AND doctor_id = ? LIMIT 1;`,
+      [recordId, doctorId]
+    );
+
+    if (recRows.length === 0) {
+      await connection.rollback();
+      return { error: 'RECORD_NOT_FOUND' };
+    }
+
+    const { medicineName, dosage, frequency, duration, instructions = null } = medData;
+
+    // 2. Insert medication
+    const [insertResult] = await connection.query(
+      `INSERT INTO medications (medical_record_id, medicine_name, dosage, frequency, duration, instructions, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, NOW());`,
+      [recordId, medicineName, dosage, frequency, duration, instructions]
+    );
+
+    const [savedRows] = await connection.query(
+      `SELECT
+         id,
+         medical_record_id AS medicalRecordId,
+         medicine_name     AS medicineName,
+         dosage,
+         frequency,
+         duration,
+         instructions,
+         created_at        AS createdAt
+       FROM medications
+       WHERE id = ?;`,
+      [insertResult.insertId]
+    );
+
+    await connection.commit();
+    return { medication: savedRows[0] };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Updates an existing medication record belonging to the authenticated doctor.
+ *
+ * @param {number} userId - From req.user.id (JWT)
+ * @param {number} medicationId - Target medications.id
+ * @param {object} medData - Updates
+ * @returns {Promise<object>}
+ */
+export async function updateMedication(userId, medicationId, medData) {
+  const doctorId = await getDoctorIdByUserId(userId);
+  if (!doctorId) {
+    return { error: 'DOCTOR_NOT_FOUND' };
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Verify medication belongs to a record owned by the authenticated doctor
+    const [medRows] = await connection.query(
+      `SELECT m.id, m.medical_record_id
+       FROM medications m
+       INNER JOIN medical_records mr ON mr.id = m.medical_record_id
+       WHERE m.id = ? AND mr.doctor_id = ?
+       LIMIT 1;`,
+      [medicationId, doctorId]
+    );
+
+    if (medRows.length === 0) {
+      await connection.rollback();
+      return { error: 'MEDICATION_NOT_FOUND' };
+    }
+
+    const { medicineName, dosage, frequency, duration, instructions = null } = medData;
+
+    await connection.query(
+      `UPDATE medications
+       SET medicine_name = ?, dosage = ?, frequency = ?, duration = ?, instructions = ?
+       WHERE id = ?;`,
+      [medicineName, dosage, frequency, duration, instructions, medicationId]
+    );
+
+    const [savedRows] = await connection.query(
+      `SELECT
+         id,
+         medical_record_id AS medicalRecordId,
+         medicine_name     AS medicineName,
+         dosage,
+         frequency,
+         duration,
+         instructions,
+         created_at        AS createdAt
+       FROM medications
+       WHERE id = ?;`,
+      [medicationId]
+    );
+
+    await connection.commit();
+    return { medication: savedRows[0] };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Deletes a prescribed medication belonging to the authenticated doctor.
+ * Ownership: medication -> medical_record -> doctor.
+ *
+ * @param {number} userId - From req.user.id (JWT)
+ * @param {number} medicationId - Target medications.id
+ * @returns {Promise<object>}
+ */
+export async function deleteMedication(userId, medicationId) {
+  const doctorId = await getDoctorIdByUserId(userId);
+  if (!doctorId) {
+    return { error: 'DOCTOR_NOT_FOUND' };
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Verify medication belongs to a record owned by this doctor
+    const [medRows] = await connection.query(
+      `SELECT m.id
+       FROM medications m
+       INNER JOIN medical_records mr ON mr.id = m.medical_record_id
+       WHERE m.id = ? AND mr.doctor_id = ?
+       LIMIT 1;`,
+      [medicationId, doctorId]
+    );
+
+    if (medRows.length === 0) {
+      await connection.rollback();
+      return { error: 'MEDICATION_NOT_FOUND' };
+    }
+
+    await connection.query(`DELETE FROM medications WHERE id = ?;`, [medicationId]);
+
+    await connection.commit();
+    return { success: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+

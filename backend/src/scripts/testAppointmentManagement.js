@@ -31,13 +31,18 @@ async function stopTestServer() {
   });
 }
 
-// Helper to calculate a future date on a specific weekday (0=Sun, 1=Mon, ..., 6=Sat)
+// Helper to calculate a future date on a specific weekday (0=Sun, 1=Mon, ..., 6=Sat) in the same target week
 function getNextWeekdayDate(dayOfWeek, weeksAhead = 1) {
   const d = new Date();
-  d.setDate(d.getDate() + ((7 + dayOfWeek - d.getDay()) % 7 || 7) + (weeksAhead - 1) * 7);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const currentDay = d.getDay();
+  const daysUntilNextMonday = ((1 - currentDay + 7) % 7) || 7;
+  const targetDate = new Date(d);
+  targetDate.setDate(d.getDate() + daysUntilNextMonday + (weeksAhead - 1) * 7);
+  const offsetFromMonday = (dayOfWeek - 1 + 7) % 7;
+  targetDate.setDate(targetDate.getDate() + offsetFromMonday);
+  const y = targetDate.getFullYear();
+  const m = String(targetDate.getMonth() + 1).padStart(2, '0');
+  const day = String(targetDate.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
