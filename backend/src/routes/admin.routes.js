@@ -10,4 +10,10 @@ router.use(authenticate, requireRole('ADMIN'));
 // GET /api/admin/dashboard
 router.get('/dashboard', adminController.getDashboard);
 
+// GET /api/admin/users?search=&role=&status=
+router.get('/users', adminController.getUsers);
+
+// PATCH /api/admin/users/:id/status
+router.patch('/users/:id/status', adminController.patchUserStatus);
+
 export default router;

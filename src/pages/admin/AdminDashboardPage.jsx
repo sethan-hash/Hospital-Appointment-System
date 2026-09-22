@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { adminService } from '../../services/adminService';
 import { Button } from '../../components/common/Button';
@@ -186,6 +186,23 @@ export function AdminDashboardPage() {
                   value={`${stats.resources?.available || 0} / ${stats.resources?.total || 0}`}
                   label={`Available Units (${stats.resources?.occupied || 0} Occupied)`}
                 />
+              </div>
+            </section>
+
+            {/* Quick Actions */}
+            <section>
+              <h2 className="text-xl font-bold text-on-surface mb-4 flex items-center gap-2">
+                <Icon name="bolt" className="text-primary" />
+                <span>Quick Actions</span>
+              </h2>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  to="/admin/users"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-sm font-semibold text-on-surface hover:bg-surface-container-high transition-colors"
+                >
+                  <Icon name="manage_accounts" className="text-primary text-xl" />
+                  Manage Users
+                </Link>
               </div>
             </section>
 

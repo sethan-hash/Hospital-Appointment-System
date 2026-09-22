@@ -1,5 +1,8 @@
 import { pool } from '../config/db.js';
 
+// Columns that are safe to return for user listings — password_hash is never included
+const USER_SAFE_COLS = 'u.id, u.role, u.full_name, u.email, u.phone, u.status, u.created_at, u.updated_at';
+
 /**
  * Admin Service
  * Queries live data across patients, doctors, appointments, invoices, and hospital resources.
@@ -173,5 +176,146 @@ export async function getAdminDashboardMetrics(adminUserId) {
     },
     recentAppointments,
     resources,
+  };
+}
+
+/**
+ * Returns a paginated, filterable list of all platform users.
+ * Safe fields only — password_hash is never included.
+ *
+ * @param {object} filters
+ * @param {string} [filters.search]  - Partial match on full_name or email (case-insensitive)
+ * @param {string} [filters.role]    - Exact role filter: PATIENT|DOCTOR|RECEPTIONIST|ADMIN
+ * @param {string} [filters.status]  - Exact status filter: ACTIVE|INACTIVE|SUSPENDED
+ * @returns {Promise<object[]>}
+ */
+export async function listUsers({ search = '', role = '', status = '' } = {}) {
+  const conditions = [];
+  const params = [];
+
+  if (search) {
+    conditions.push('(u.full_name LIKE ? OR u.email LIKE ?)');
+    const pattern = `%${search}%`;
+    params.push(pattern, pattern);
+  }
+
+  if (role) {
+    conditions.push('u.role = ?');
+    params.push(role.toUpperCase());
+  }
+
+  if (status) {
+    conditions.push('u.status = ?');
+    params.push(status.toUpperCase());
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const [rows] = await pool.query(
+    `SELECT
+       ${USER_SAFE_COLS},
+       -- Optional linked profile summary
+       d.specialization,
+       d.department,
+       d.hospital_name AS hospitalName,
+       p.gender AS patientGender,
+       p.city AS patientCity
+     FROM users u
+     LEFT JOIN doctors d ON d.user_id = u.id
+     LEFT JOIN patients p ON p.user_id = u.id
+     ${whereClause}
+     ORDER BY u.id ASC;`,
+    params
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    role: row.role,
+    fullName: row.full_name,
+    email: row.email,
+    phone: row.phone,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    // Include linked profile info where relevant
+    ...(row.role === 'DOCTOR' && {
+      profile: {
+        specialization: row.specialization,
+        department: row.department,
+        hospitalName: row.hospitalName,
+      },
+    }),
+    ...(row.role === 'PATIENT' && {
+      profile: {
+        gender: row.patientGender,
+        city: row.patientCity,
+      },
+    }),
+  }));
+}
+
+/**
+ * Updates a user's account status (ACTIVE | INACTIVE | SUSPENDED).
+ * Prevents deactivating the last active ADMIN account to avoid lockout.
+ *
+ * @param {number} adminUserId  - ID of the requesting admin (from JWT); used for lockout guard
+ * @param {number} targetUserId - ID of the user to update
+ * @param {string} newStatus    - 'ACTIVE' | 'INACTIVE' | 'SUSPENDED'
+ * @returns {Promise<object>}   - Updated safe user record
+ */
+export async function updateUserStatus(adminUserId, targetUserId, newStatus) {
+  const ALLOWED_STATUSES = ['ACTIVE', 'INACTIVE', 'SUSPENDED'];
+  const normalizedStatus = (newStatus || '').toUpperCase();
+
+  if (!ALLOWED_STATUSES.includes(normalizedStatus)) {
+    const err = new Error(`Invalid status value. Allowed: ${ALLOWED_STATUSES.join(', ')}.`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // 1. Fetch the target user to ensure they exist
+  const [targetRows] = await pool.query(
+    `SELECT id, role, full_name, email, phone, status FROM users WHERE id = ? LIMIT 1;`,
+    [targetUserId]
+  );
+
+  if (targetRows.length === 0) {
+    const err = new Error('User not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const target = targetRows[0];
+
+  // 2. Lockout guard — prevent deactivating/suspending the last active ADMIN
+  if (target.role === 'ADMIN' && normalizedStatus !== 'ACTIVE') {
+    const [[{ activeAdminCount }]] = await pool.query(
+      `SELECT COUNT(*) AS activeAdminCount FROM users WHERE role = 'ADMIN' AND status = 'ACTIVE';`
+    );
+
+    if (Number(activeAdminCount) <= 1) {
+      const err = new Error(
+        'Cannot deactivate or suspend the last active administrator account. ' +
+        'Promote another user to ADMIN first.'
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+  }
+
+  // 3. Persist the status change
+  await pool.query(
+    `UPDATE users SET status = ? WHERE id = ?;`,
+    [normalizedStatus, targetUserId]
+  );
+
+  return {
+    id: target.id,
+    role: target.role,
+    fullName: target.full_name,
+    email: target.email,
+    phone: target.phone,
+    previousStatus: target.status,
+    newStatus: normalizedStatus,
   };
 }

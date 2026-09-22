@@ -18,6 +18,7 @@ import { RegistrationCompletePage } from './pages/onboarding/RegistrationComplet
 import { DoctorDashboardPage } from './pages/doctor/DoctorDashboardPage';
 import { ReceptionistDashboardPage } from './pages/receptionist/ReceptionistDashboardPage';
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
+import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 
 // Patient Application Pages
 import { PatientDashboardPage } from './pages/patient/PatientDashboardPage';
@@ -78,6 +79,16 @@ export function App() {
                 <ProtectedRoute>
                   <RoleRoute allowedRoles={['ADMIN']}>
                     <AdminDashboardPage />
+                  </RoleRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/users"
+              element={
+                <ProtectedRoute>
+                  <RoleRoute allowedRoles={['ADMIN']}>
+                    <AdminUsersPage />
                   </RoleRoute>
                 </ProtectedRoute>
               }
