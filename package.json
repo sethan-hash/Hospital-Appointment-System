@@ -22,7 +22,8 @@
     "test:doctor-reviews": "node backend/src/scripts/testDoctorReviews.js",
     "test:system-integration": "node backend/src/scripts/testSystemIntegration.js",
     "test:security": "node backend/src/scripts/testSecurityHardening.js",
-    "test:security-hardening": "node backend/src/scripts/testSecurityHardening.js"
+    "test:security-hardening": "node backend/src/scripts/testSecurityHardening.js",
+    "test:admin-dashboard": "node backend/src/scripts/testAdminDashboard.js"
   },
   "dependencies": {
     "react": "^19.2.8",

@@ -5,6 +5,7 @@ import patientRoutes from './patient.routes.js';
 import doctorRoutes from './doctor.routes.js';
 import doctorPortalRoutes from './doctor-portal.routes.js';
 import appointmentRoutes from './appointment.routes.js';
+import adminRoutes from './admin.routes.js';
 
 const apiRouter = Router();
 
@@ -15,6 +16,7 @@ apiRouter.use('/patients', patientRoutes);
 apiRouter.use('/doctors', doctorRoutes);        // PATIENT role — browse doctors
 apiRouter.use('/doctor', doctorPortalRoutes);   // DOCTOR role — doctor portal
 apiRouter.use('/appointments', appointmentRoutes);
+apiRouter.use('/admin', adminRoutes);           // ADMIN role — admin portal
 
 export default apiRouter;
 
