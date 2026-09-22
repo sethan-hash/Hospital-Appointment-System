@@ -2,12 +2,13 @@ import { Router } from 'express';
 import * as authController from '../controllers/auth.controller.js';
 import { validateRegistration, validateLogin } from '../validators/auth.validator.js';
 import { authenticate, requireRole } from '../middleware/auth.middleware.js';
+import { authRateLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
 
 // Public authentication routes
-router.post('/register', validateRegistration, authController.register);
-router.post('/login', validateLogin, authController.login);
+router.post('/register', authRateLimiter, validateRegistration, authController.register);
+router.post('/login', authRateLimiter, validateLogin, authController.login);
 
 // Protected user profile route
 router.get('/me', authenticate, authController.getCurrentUser);

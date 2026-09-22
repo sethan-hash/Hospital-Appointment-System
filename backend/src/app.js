@@ -1,4 +1,5 @@
 import express from 'express';
+import helmet from 'helmet';
 import cors from 'cors';
 import { env } from './config/env.js';
 import { requestLogger } from './middleware/logger.js';
@@ -7,6 +8,13 @@ import { notFoundHandler } from './middleware/notFoundHandler.js';
 import apiRouter from './routes/index.js';
 
 const app = express();
+
+// Set HTTP security headers using Helmet
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 
 // Enable CORS for React frontend
 app.use(

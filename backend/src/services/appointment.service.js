@@ -349,7 +349,7 @@ export async function rescheduleAppointment({ userId, appointmentId, appointment
 
   // Verify appointment exists and belongs to authenticated patient
   const [aptRows] = await pool.query(
-    'SELECT * FROM appointments WHERE id = ? LIMIT 1;',
+    'SELECT id, patient_id, doctor_id, status FROM appointments WHERE id = ? LIMIT 1;',
     [appointmentId]
   );
 
@@ -471,7 +471,7 @@ export async function cancelAppointment({ userId, appointmentId }) {
   const patientId = await resolvePatientId(userId);
 
   const [aptRows] = await pool.query(
-    'SELECT * FROM appointments WHERE id = ? LIMIT 1;',
+    'SELECT id, patient_id, status FROM appointments WHERE id = ? LIMIT 1;',
     [appointmentId]
   );
 

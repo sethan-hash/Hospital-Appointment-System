@@ -20,6 +20,10 @@
     "test:doctor-appointment": "node src/scripts/testDoctorAppointmentDetails.js",
     "test:clinical-records": "node src/scripts/testDoctorClinicalRecords.js",
     "test:doctor-profile-schedule": "node src/scripts/testDoctorProfileSchedule.js",
+    "test:doctor-reviews": "node src/scripts/testDoctorReviews.js",
+    "test:system-integration": "node src/scripts/testSystemIntegration.js",
+    "test:security": "node src/scripts/testSecurityHardening.js",
+    "test:security-hardening": "node src/scripts/testSecurityHardening.js",
     "test": "node src/scripts/testAuth.js && node src/scripts/testPatientProfile.js && node src/scripts/testDoctorSearch.js && node src/scripts/testDoctorDetails.js && node src/scripts/testAppointmentBooking.js && node src/scripts/testAppointmentManagement.js && node src/scripts/testMedicalRecords.js"
   },
   "keywords": [
@@ -35,6 +39,8 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.0",
     "mysql2": "^3.12.0"

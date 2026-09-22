@@ -20,7 +20,9 @@
     "test:clinical-records": "node backend/src/scripts/testDoctorClinicalRecords.js",
     "test:doctor-profile-schedule": "node backend/src/scripts/testDoctorProfileSchedule.js",
     "test:doctor-reviews": "node backend/src/scripts/testDoctorReviews.js",
-    "test:system-integration": "node backend/src/scripts/testSystemIntegration.js"
+    "test:system-integration": "node backend/src/scripts/testSystemIntegration.js",
+    "test:security": "node backend/src/scripts/testSecurityHardening.js",
+    "test:security-hardening": "node backend/src/scripts/testSecurityHardening.js"
   },
   "dependencies": {
     "react": "^19.2.8",

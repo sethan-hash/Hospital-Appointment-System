@@ -9,11 +9,20 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
+// F-01 — Fail fast if JWT_SECRET is missing; never fall back to a hard-coded value.
+if (!process.env.JWT_SECRET) {
+  throw new Error(
+    'FATAL: JWT_SECRET environment variable is not set. ' +
+    'Set a cryptographically random value (≥256 bits) before starting the server.'
+  );
+}
+
 export const env = {
   port: parseInt(process.env.PORT, 10) || 5000,
-  nodeEnv: process.env.NODE_ENV || 'development',
-  isDevelopment: (process.env.NODE_ENV || 'development') === 'development',
-  isProduction: process.env.NODE_ENV === 'production',
+  // F-05 — Default to 'production' behaviour (safe) when NODE_ENV is unset.
+  nodeEnv: process.env.NODE_ENV || 'production',
+  isDevelopment: process.env.NODE_ENV === 'development',
+  isProduction: process.env.NODE_ENV !== 'development',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
   db: {
     host: process.env.DB_HOST || 'localhost',
@@ -24,7 +33,8 @@ export const env = {
     connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT, 10) || 10,
   },
   jwt: {
-    secret: process.env.JWT_SECRET || 'medlink-care-jwt-secret-key-local-dev-2026',
+    // F-01 — No fallback; process will have already thrown above if secret is absent.
+    secret: process.env.JWT_SECRET,
     expiresIn: process.env.JWT_EXPIRES_IN || '24h',
   },
 };
