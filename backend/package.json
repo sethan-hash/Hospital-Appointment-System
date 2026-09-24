@@ -26,6 +26,7 @@
     "test:security-hardening": "node src/scripts/testSecurityHardening.js",
     "test:admin-dashboard": "node src/scripts/testAdminDashboard.js",
     "test:admin-users": "node src/scripts/testAdminUserManagement.js",
+    "test:admin-billing-resources": "node src/scripts/testAdminBillingResources.js",
     "test": "node src/scripts/testAuth.js && node src/scripts/testPatientProfile.js && node src/scripts/testDoctorSearch.js && node src/scripts/testDoctorDetails.js && node src/scripts/testAppointmentBooking.js && node src/scripts/testAppointmentManagement.js && node src/scripts/testMedicalRecords.js"
   },
   "keywords": [

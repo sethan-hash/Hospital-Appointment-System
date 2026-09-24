@@ -203,6 +203,20 @@ export function AdminDashboardPage() {
                   <Icon name="manage_accounts" className="text-primary text-xl" />
                   Manage Users
                 </Link>
+                <Link
+                  to="/admin/billing"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-sm font-semibold text-on-surface hover:bg-surface-container-high transition-colors"
+                >
+                  <Icon name="receipt_long" className="text-primary text-xl" />
+                  Billing & Invoices
+                </Link>
+                <Link
+                  to="/admin/resources"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-sm font-semibold text-on-surface hover:bg-surface-container-high transition-colors"
+                >
+                  <Icon name="inventory_2" className="text-primary text-xl" />
+                  Hospital Resources
+                </Link>
               </div>
             </section>
 
@@ -274,9 +288,17 @@ export function AdminDashboardPage() {
                     <Icon name="inventory_2" className="text-primary" />
                     <span>Hospital Infrastructure</span>
                   </h3>
-                  <span className="text-xs text-on-surface-variant font-medium">
-                    {stats.resources?.available || 0} Ready
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-on-surface-variant font-medium">
+                      {stats.resources?.available || 0} Ready
+                    </span>
+                    <Link
+                      to="/admin/resources"
+                      className="text-xs text-primary font-semibold hover:underline flex items-center"
+                    >
+                      Manage →
+                    </Link>
+                  </div>
                 </div>
 
                 {resources.length === 0 ? (

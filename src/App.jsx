@@ -19,6 +19,8 @@ import { DoctorDashboardPage } from './pages/doctor/DoctorDashboardPage';
 import { ReceptionistDashboardPage } from './pages/receptionist/ReceptionistDashboardPage';
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
+import { AdminBillingPage } from './pages/admin/AdminBillingPage';
+import { AdminResourcesPage } from './pages/admin/AdminResourcesPage';
 
 // Patient Application Pages
 import { PatientDashboardPage } from './pages/patient/PatientDashboardPage';
@@ -89,6 +91,26 @@ export function App() {
                 <ProtectedRoute>
                   <RoleRoute allowedRoles={['ADMIN']}>
                     <AdminUsersPage />
+                  </RoleRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/billing"
+              element={
+                <ProtectedRoute>
+                  <RoleRoute allowedRoles={['ADMIN']}>
+                    <AdminBillingPage />
+                  </RoleRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/resources"
+              element={
+                <ProtectedRoute>
+                  <RoleRoute allowedRoles={['ADMIN']}>
+                    <AdminResourcesPage />
                   </RoleRoute>
                 </ProtectedRoute>
               }

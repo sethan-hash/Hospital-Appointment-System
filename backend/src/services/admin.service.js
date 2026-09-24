@@ -319,3 +319,575 @@ export async function updateUserStatus(adminUserId, targetUserId, newStatus) {
     newStatus: normalizedStatus,
   };
 }
+
+const ALLOWED_INVOICE_STATUSES = ['PENDING', 'PAID', 'PARTIALLY_PAID', 'CANCELLED', 'REFUNDED'];
+const ALLOWED_PAYMENT_METHODS = ['UPI', 'CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'NET_BANKING', 'INSURANCE'];
+const ALLOWED_RESOURCE_STATUSES = ['AVAILABLE', 'OCCUPIED', 'UNDER_MAINTENANCE', 'RESERVED'];
+const ALLOWED_RESOURCE_TYPES = ['ICU_BED', 'GENERAL_BED', 'VENTILATOR', 'OXYGEN_CYLINDER', 'AMBULANCE', 'OPERATION_THEATRE'];
+
+/**
+ * Returns a filterable list of all hospital invoices, including patient and appointment metadata.
+ * Safe fields only — no password_hash or sensitive user information.
+ *
+ * @param {object} [filters]
+ * @param {string} [filters.search]        - Search invoice_number, patient name, or patient email
+ * @param {string} [filters.status]        - Payment status: PENDING|PAID|PARTIALLY_PAID|CANCELLED|REFUNDED
+ * @param {string} [filters.paymentMethod] - Payment method: UPI|CASH|CREDIT_CARD|DEBIT_CARD|NET_BANKING|INSURANCE
+ * @param {string} [filters.dateFrom]      - Issue date from (YYYY-MM-DD)
+ * @param {string} [filters.dateTo]        - Issue date to (YYYY-MM-DD)
+ * @returns {Promise<{ invoices: object[], summary: object }>}
+ */
+export async function listInvoices({ search = '', status = '', paymentMethod = '', dateFrom = '', dateTo = '' } = {}) {
+  const conditions = [];
+  const params = [];
+
+  if (search && search.trim()) {
+    conditions.push('(i.invoice_number LIKE ? OR u_p.full_name LIKE ? OR u_p.email LIKE ?)');
+    const term = `%${search.trim()}%`;
+    params.push(term, term, term);
+  }
+
+  if (status && status.trim()) {
+    const normStatus = status.trim().toUpperCase();
+    if (ALLOWED_INVOICE_STATUSES.includes(normStatus)) {
+      conditions.push('i.payment_status = ?');
+      params.push(normStatus);
+    }
+  }
+
+  if (paymentMethod && paymentMethod.trim()) {
+    const normMethod = paymentMethod.trim().toUpperCase();
+    if (ALLOWED_PAYMENT_METHODS.includes(normMethod)) {
+      conditions.push('i.payment_method = ?');
+      params.push(normMethod);
+    }
+  }
+
+  if (dateFrom && dateFrom.trim()) {
+    conditions.push('i.issue_date >= ?');
+    params.push(dateFrom.trim());
+  }
+
+  if (dateTo && dateTo.trim()) {
+    conditions.push('i.issue_date <= ?');
+    params.push(dateTo.trim());
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const [rows] = await pool.query(
+    `SELECT
+       i.id,
+       i.invoice_number,
+       i.patient_id,
+       i.appointment_id,
+       i.consultation_fee,
+       i.procedure_fee,
+       i.medicine_fee,
+       i.tax_amount,
+       i.total_amount,
+       i.currency,
+       i.payment_status,
+       i.payment_method,
+       i.issue_date,
+       i.paid_at,
+       i.created_at,
+       i.updated_at,
+       u_p.full_name AS patient_name,
+       u_p.email AS patient_email,
+       u_p.phone AS patient_phone,
+       p.gender AS patient_gender,
+       p.blood_group AS patient_blood_group,
+       a.appointment_date,
+       a.appointment_time,
+       a.type AS appointment_type,
+       u_d.full_name AS doctor_name,
+       d.department AS doctor_department,
+       d.specialization AS doctor_specialization
+     FROM invoices i
+     JOIN patients p ON i.patient_id = p.id
+     JOIN users u_p ON p.user_id = u_p.id
+     LEFT JOIN appointments a ON i.appointment_id = a.id
+     LEFT JOIN doctors d ON a.doctor_id = d.id
+     LEFT JOIN users u_d ON d.user_id = u_d.id
+     ${whereClause}
+     ORDER BY i.issue_date DESC, i.id DESC;`,
+    params
+  );
+
+  const [summaryRows] = await pool.query(
+    `SELECT
+       COUNT(*) AS totalCount,
+       COALESCE(SUM(total_amount), 0) AS totalRevenue,
+       COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN 1 ELSE 0 END), 0) AS paidCount,
+       COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN total_amount ELSE 0 END), 0) AS paidRevenue,
+       COALESCE(SUM(CASE WHEN payment_status = 'PENDING' THEN 1 ELSE 0 END), 0) AS pendingCount,
+       COALESCE(SUM(CASE WHEN payment_status = 'PENDING' THEN total_amount ELSE 0 END), 0) AS pendingRevenue,
+       COALESCE(SUM(CASE WHEN payment_method = 'INSURANCE' THEN 1 ELSE 0 END), 0) AS insuranceCount,
+       COALESCE(SUM(CASE WHEN payment_method = 'INSURANCE' THEN total_amount ELSE 0 END), 0) AS insuranceRevenue
+     FROM invoices;`
+  );
+
+  const summary = {
+    totalInvoices: Number(summaryRows[0]?.totalCount || 0),
+    totalRevenue: parseFloat(summaryRows[0]?.totalRevenue || 0),
+    paidCount: Number(summaryRows[0]?.paidCount || 0),
+    paidRevenue: parseFloat(summaryRows[0]?.paidRevenue || 0),
+    pendingCount: Number(summaryRows[0]?.pendingCount || 0),
+    pendingRevenue: parseFloat(summaryRows[0]?.pendingRevenue || 0),
+    insuranceCount: Number(summaryRows[0]?.insuranceCount || 0),
+    insuranceRevenue: parseFloat(summaryRows[0]?.insuranceRevenue || 0),
+    currency: 'INR',
+  };
+
+  const invoices = rows.map((row) => ({
+    id: row.id,
+    invoiceNumber: row.invoice_number,
+    patientId: row.patient_id,
+    appointmentId: row.appointment_id,
+    consultationFee: parseFloat(row.consultation_fee),
+    procedureFee: parseFloat(row.procedure_fee),
+    medicineFee: parseFloat(row.medicine_fee),
+    taxAmount: parseFloat(row.tax_amount),
+    totalAmount: parseFloat(row.total_amount),
+    currency: row.currency,
+    paymentStatus: row.payment_status,
+    paymentMethod: row.payment_method,
+    issueDate: row.issue_date,
+    paidAt: row.paid_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    patient: {
+      id: row.patient_id,
+      fullName: row.patient_name,
+      email: row.patient_email,
+      phone: row.patient_phone,
+      gender: row.patient_gender,
+      bloodGroup: row.patient_blood_group,
+    },
+    appointment: row.appointment_id
+      ? {
+          id: row.appointment_id,
+          date: row.appointment_date,
+          time: row.appointment_time,
+          type: row.appointment_type,
+          doctorName: row.doctor_name,
+          department: row.doctor_department,
+          specialization: row.doctor_specialization,
+        }
+      : null,
+  }));
+
+  return { invoices, summary };
+}
+
+/**
+ * Retrieves full details for a single invoice.
+ *
+ * @param {number} invoiceId
+ * @returns {Promise<object>}
+ */
+export async function getInvoiceById(invoiceId) {
+  if (!invoiceId || !Number.isInteger(invoiceId) || invoiceId <= 0) {
+    const err = new Error('Invalid invoice ID.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const [rows] = await pool.query(
+    `SELECT
+       i.id,
+       i.invoice_number,
+       i.patient_id,
+       i.appointment_id,
+       i.consultation_fee,
+       i.procedure_fee,
+       i.medicine_fee,
+       i.tax_amount,
+       i.total_amount,
+       i.currency,
+       i.payment_status,
+       i.payment_method,
+       i.issue_date,
+       i.paid_at,
+       i.created_at,
+       i.updated_at,
+       u_p.full_name AS patient_name,
+       u_p.email AS patient_email,
+       u_p.phone AS patient_phone,
+       p.gender AS patient_gender,
+       p.blood_group AS patient_blood_group,
+       a.appointment_date,
+       a.appointment_time,
+       a.type AS appointment_type,
+       u_d.full_name AS doctor_name,
+       d.department AS doctor_department,
+       d.specialization AS doctor_specialization
+     FROM invoices i
+     JOIN patients p ON i.patient_id = p.id
+     JOIN users u_p ON p.user_id = u_p.id
+     LEFT JOIN appointments a ON i.appointment_id = a.id
+     LEFT JOIN doctors d ON a.doctor_id = d.id
+     LEFT JOIN users u_d ON d.user_id = u_d.id
+     WHERE i.id = ?
+     LIMIT 1;`,
+    [invoiceId]
+  );
+
+  if (rows.length === 0) {
+    const err = new Error('Invoice not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const row = rows[0];
+  return {
+    id: row.id,
+    invoiceNumber: row.invoice_number,
+    patientId: row.patient_id,
+    appointmentId: row.appointment_id,
+    consultationFee: parseFloat(row.consultation_fee),
+    procedureFee: parseFloat(row.procedure_fee),
+    medicineFee: parseFloat(row.medicine_fee),
+    taxAmount: parseFloat(row.tax_amount),
+    totalAmount: parseFloat(row.total_amount),
+    currency: row.currency,
+    paymentStatus: row.payment_status,
+    paymentMethod: row.payment_method,
+    issueDate: row.issue_date,
+    paidAt: row.paid_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    patient: {
+      id: row.patient_id,
+      fullName: row.patient_name,
+      email: row.patient_email,
+      phone: row.patient_phone,
+      gender: row.patient_gender,
+      bloodGroup: row.patient_blood_group,
+    },
+    appointment: row.appointment_id
+      ? {
+          id: row.appointment_id,
+          date: row.appointment_date,
+          time: row.appointment_time,
+          type: row.appointment_type,
+          doctorName: row.doctor_name,
+          department: row.doctor_department,
+          specialization: row.doctor_specialization,
+        }
+      : null,
+  };
+}
+
+/**
+ * Updates an invoice's payment status and/or payment method.
+ *
+ * @param {number} adminUserId
+ * @param {number} invoiceId
+ * @param {object} updates
+ * @param {string} updates.paymentStatus
+ * @param {string|null} [updates.paymentMethod]
+ * @returns {Promise<object>} Updated invoice record
+ */
+export async function updateInvoiceStatus(adminUserId, invoiceId, { paymentStatus, paymentMethod }) {
+  if (!invoiceId || !Number.isInteger(invoiceId) || invoiceId <= 0) {
+    const err = new Error('Invalid invoice ID.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (!paymentStatus || typeof paymentStatus !== 'string') {
+    const err = new Error('A valid paymentStatus is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const normStatus = paymentStatus.trim().toUpperCase();
+  if (!ALLOWED_INVOICE_STATUSES.includes(normStatus)) {
+    const err = new Error(`Invalid paymentStatus. Allowed: ${ALLOWED_INVOICE_STATUSES.join(', ')}.`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  let normMethod;
+  if (paymentMethod !== undefined) {
+    if (paymentMethod === null || paymentMethod === '') {
+      normMethod = null;
+    } else {
+      const parsed = String(paymentMethod).trim().toUpperCase();
+      if (!ALLOWED_PAYMENT_METHODS.includes(parsed)) {
+        const err = new Error(`Invalid paymentMethod. Allowed: ${ALLOWED_PAYMENT_METHODS.join(', ')}.`);
+        err.statusCode = 400;
+        throw err;
+      }
+      normMethod = parsed;
+    }
+  }
+
+  const [existing] = await pool.query(
+    'SELECT id, payment_status, payment_method, paid_at FROM invoices WHERE id = ? LIMIT 1;',
+    [invoiceId]
+  );
+
+  if (existing.length === 0) {
+    const err = new Error('Invoice not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const current = existing[0];
+  const setClauses = ['payment_status = ?'];
+  const updateParams = [normStatus];
+
+  if (normStatus === 'PAID') {
+    if (!current.paid_at) {
+      setClauses.push('paid_at = CURRENT_TIMESTAMP');
+    }
+  } else if (normStatus === 'PENDING' || normStatus === 'CANCELLED') {
+    setClauses.push('paid_at = NULL');
+  }
+
+  if (normMethod !== undefined) {
+    setClauses.push('payment_method = ?');
+    updateParams.push(normMethod);
+  }
+
+  updateParams.push(invoiceId);
+
+  await pool.query(
+    `UPDATE invoices SET ${setClauses.join(', ')} WHERE id = ?;`,
+    updateParams
+  );
+
+  return getInvoiceById(invoiceId);
+}
+
+/**
+ * Returns a filterable list of all hospital infrastructure resources.
+ * Safe fields only — includes allocated patient metadata when occupied.
+ *
+ * @param {object} [filters]
+ * @param {string} [filters.search] - Search resource code, ward/location, or hospital name
+ * @param {string} [filters.type]   - Resource type filter
+ * @param {string} [filters.status] - Resource status filter
+ * @returns {Promise<{ resources: object[], summary: object }>}
+ */
+export async function listResources({ search = '', type = '', status = '' } = {}) {
+  const conditions = [];
+  const params = [];
+
+  if (search && search.trim()) {
+    conditions.push('(r.resource_code LIKE ? OR r.location_ward LIKE ? OR r.hospital_name LIKE ?)');
+    const term = `%${search.trim()}%`;
+    params.push(term, term, term);
+  }
+
+  if (type && type.trim()) {
+    const normType = type.trim().toUpperCase();
+    if (ALLOWED_RESOURCE_TYPES.includes(normType)) {
+      conditions.push('r.resource_type = ?');
+      params.push(normType);
+    }
+  }
+
+  if (status && status.trim()) {
+    const normStatus = status.trim().toUpperCase();
+    if (ALLOWED_RESOURCE_STATUSES.includes(normStatus)) {
+      conditions.push('r.status = ?');
+      params.push(normStatus);
+    }
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const [rows] = await pool.query(
+    `SELECT
+       r.id,
+       r.resource_type,
+       r.resource_code,
+       r.hospital_name,
+       r.location_ward,
+       r.status,
+       r.allocated_patient_id,
+       r.last_inspected_at,
+       r.created_at,
+       r.updated_at,
+       u_p.full_name AS allocated_patient_name,
+       u_p.email AS allocated_patient_email,
+       u_p.phone AS allocated_patient_phone
+     FROM resources r
+     LEFT JOIN patients p ON r.allocated_patient_id = p.id
+     LEFT JOIN users u_p ON p.user_id = u_p.id
+     ${whereClause}
+     ORDER BY r.id ASC;`,
+    params
+  );
+
+  const [summaryRows] = await pool.query(
+    `SELECT
+       COUNT(*) AS total,
+       COALESCE(SUM(CASE WHEN status = 'AVAILABLE' THEN 1 ELSE 0 END), 0) AS available,
+       COALESCE(SUM(CASE WHEN status = 'OCCUPIED' THEN 1 ELSE 0 END), 0) AS occupied,
+       COALESCE(SUM(CASE WHEN status = 'UNDER_MAINTENANCE' THEN 1 ELSE 0 END), 0) AS underMaintenance,
+       COALESCE(SUM(CASE WHEN status = 'RESERVED' THEN 1 ELSE 0 END), 0) AS reserved
+     FROM resources;`
+  );
+
+  const summary = {
+    total: Number(summaryRows[0]?.total || 0),
+    available: Number(summaryRows[0]?.available || 0),
+    occupied: Number(summaryRows[0]?.occupied || 0),
+    underMaintenance: Number(summaryRows[0]?.underMaintenance || 0),
+    reserved: Number(summaryRows[0]?.reserved || 0),
+  };
+
+  const resources = rows.map((row) => ({
+    id: row.id,
+    resourceType: row.resource_type,
+    resourceCode: row.resource_code,
+    hospitalName: row.hospital_name,
+    locationWard: row.location_ward,
+    status: row.status,
+    allocatedPatientId: row.allocated_patient_id,
+    allocatedPatient: row.allocated_patient_id
+      ? {
+          id: row.allocated_patient_id,
+          fullName: row.allocated_patient_name,
+          email: row.allocated_patient_email,
+          phone: row.allocated_patient_phone,
+        }
+      : null,
+    lastInspectedAt: row.last_inspected_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+
+  return { resources, summary };
+}
+
+/**
+ * Updates a hospital infrastructure resource's status and optional allocated patient.
+ * Prevents invalid resource states:
+ * - Setting AVAILABLE or UNDER_MAINTENANCE clears allocated_patient_id to NULL.
+ * - Setting OCCUPIED or RESERVED with a patient validates patient existence in DB.
+ *
+ * @param {number} adminUserId
+ * @param {number} resourceId
+ * @param {object} updates
+ * @param {string} updates.status
+ * @param {number|null} [updates.allocatedPatientId]
+ * @returns {Promise<object>} Updated resource record
+ */
+export async function updateResourceStatus(adminUserId, resourceId, { status, allocatedPatientId } = {}) {
+  if (!resourceId || !Number.isInteger(resourceId) || resourceId <= 0) {
+    const err = new Error('Invalid resource ID.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (!status || typeof status !== 'string') {
+    const err = new Error('A valid status is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const normStatus = status.trim().toUpperCase();
+  if (!ALLOWED_RESOURCE_STATUSES.includes(normStatus)) {
+    const err = new Error(`Invalid status. Allowed: ${ALLOWED_RESOURCE_STATUSES.join(', ')}.`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const [existing] = await pool.query(
+    'SELECT id, resource_type, resource_code, status, allocated_patient_id FROM resources WHERE id = ? LIMIT 1;',
+    [resourceId]
+  );
+
+  if (existing.length === 0) {
+    const err = new Error('Resource not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const current = existing[0];
+  let newPatientId = null;
+
+  if (normStatus === 'AVAILABLE' || normStatus === 'UNDER_MAINTENANCE') {
+    newPatientId = null;
+  } else if (normStatus === 'OCCUPIED' || normStatus === 'RESERVED') {
+    if (allocatedPatientId !== undefined) {
+      if (allocatedPatientId === null || allocatedPatientId === '') {
+        newPatientId = null;
+      } else {
+        const pId = Number(allocatedPatientId);
+        if (!Number.isInteger(pId) || pId <= 0) {
+          const err = new Error('Invalid allocatedPatientId.');
+          err.statusCode = 400;
+          throw err;
+        }
+
+        const [patRows] = await pool.query('SELECT id FROM patients WHERE id = ? LIMIT 1;', [pId]);
+        if (patRows.length === 0) {
+          const err = new Error('Allocated patient not found.');
+          err.statusCode = 400;
+          throw err;
+        }
+        newPatientId = pId;
+      }
+    } else {
+      newPatientId = current.allocated_patient_id;
+    }
+  }
+
+  await pool.query(
+    `UPDATE resources 
+     SET status = ?, allocated_patient_id = ?, last_inspected_at = CURRENT_TIMESTAMP
+     WHERE id = ?;`,
+    [normStatus, newPatientId, resourceId]
+  );
+
+  const [updatedRows] = await pool.query(
+    `SELECT
+       r.id,
+       r.resource_type,
+       r.resource_code,
+       r.hospital_name,
+       r.location_ward,
+       r.status,
+       r.allocated_patient_id,
+       r.last_inspected_at,
+       r.created_at,
+       r.updated_at,
+       u_p.full_name AS allocated_patient_name,
+       u_p.email AS allocated_patient_email,
+       u_p.phone AS allocated_patient_phone
+     FROM resources r
+     LEFT JOIN patients p ON r.allocated_patient_id = p.id
+     LEFT JOIN users u_p ON p.user_id = u_p.id
+     WHERE r.id = ? LIMIT 1;`,
+    [resourceId]
+  );
+
+  const row = updatedRows[0];
+  return {
+    id: row.id,
+    resourceType: row.resource_type,
+    resourceCode: row.resource_code,
+    hospitalName: row.hospital_name,
+    locationWard: row.location_ward,
+    status: row.status,
+    allocatedPatientId: row.allocated_patient_id,
+    allocatedPatient: row.allocated_patient_id
+      ? {
+          id: row.allocated_patient_id,
+          fullName: row.allocated_patient_name,
+          email: row.allocated_patient_email,
+          phone: row.allocated_patient_phone,
+        }
+      : null,
+    lastInspectedAt: row.last_inspected_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}

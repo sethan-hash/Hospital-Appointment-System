@@ -82,3 +82,170 @@ export async function patchUserStatus(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * GET /api/admin/invoices
+ * Lists hospital invoices with optional search, status, payment method, and date filters.
+ * Query params: ?search=&status=&paymentMethod=&dateFrom=&dateTo=
+ */
+export async function getInvoices(req, res, next) {
+  try {
+    const { search = '', status = '', paymentMethod = '', dateFrom = '', dateTo = '' } = req.query;
+
+    const { invoices, summary } = await adminService.listInvoices({
+      search,
+      status,
+      paymentMethod,
+      dateFrom,
+      dateTo,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Invoices retrieved successfully.',
+      data: {
+        invoices,
+        summary,
+        total: invoices.length,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/admin/invoices/:id
+ * Retrieves detailed invoice information by ID.
+ */
+export async function getInvoiceById(req, res, next) {
+  try {
+    const invoiceId = Number(req.params.id);
+
+    if (!invoiceId || !Number.isInteger(invoiceId) || invoiceId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid invoice ID in path parameter.',
+      });
+    }
+
+    const invoice = await adminService.getInvoiceById(invoiceId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Invoice details retrieved successfully.',
+      data: { invoice },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PATCH /api/admin/invoices/:id/status
+ * Updates invoice payment status and optionally payment method.
+ * Body: { paymentStatus: string, paymentMethod?: string | null }
+ */
+export async function patchInvoiceStatus(req, res, next) {
+  try {
+    const adminUserId = req.user.id;
+    const invoiceId = Number(req.params.id);
+    const { paymentStatus, paymentMethod } = req.body;
+
+    if (!invoiceId || !Number.isInteger(invoiceId) || invoiceId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid invoice ID in path parameter.',
+      });
+    }
+
+    if (!paymentStatus || typeof paymentStatus !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Request body must include a valid "paymentStatus" field.',
+      });
+    }
+
+    const updated = await adminService.updateInvoiceStatus(adminUserId, invoiceId, {
+      paymentStatus,
+      paymentMethod,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Invoice ${updated.invoiceNumber} status updated to ${updated.paymentStatus}.`,
+      data: { invoice: updated },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/admin/resources
+ * Lists hospital infrastructure resources with optional search, type, and status filters.
+ * Query params: ?search=&type=&status=
+ */
+export async function getResources(req, res, next) {
+  try {
+    const { search = '', type = '', status = '' } = req.query;
+
+    const { resources, summary } = await adminService.listResources({
+      search,
+      type,
+      status,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Resources retrieved successfully.',
+      data: {
+        resources,
+        summary,
+        total: resources.length,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PATCH /api/admin/resources/:id/status
+ * Updates hospital resource status and optional patient allocation.
+ * Body: { status: string, allocatedPatientId?: number | null }
+ */
+export async function patchResourceStatus(req, res, next) {
+  try {
+    const adminUserId = req.user.id;
+    const resourceId = Number(req.params.id);
+    const { status, allocatedPatientId } = req.body;
+
+    if (!resourceId || !Number.isInteger(resourceId) || resourceId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid resource ID in path parameter.',
+      });
+    }
+
+    if (!status || typeof status !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Request body must include a valid "status" field.',
+      });
+    }
+
+    const updated = await adminService.updateResourceStatus(adminUserId, resourceId, {
+      status,
+      allocatedPatientId,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Resource ${updated.resourceCode} status updated to ${updated.status}.`,
+      data: { resource: updated },
+    });
+  } catch (err) {
+    next(err);
+  }
+}

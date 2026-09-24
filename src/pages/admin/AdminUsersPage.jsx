@@ -129,7 +129,7 @@ function StatusConfirmModal({ isOpen, onClose, onConfirm, user, newStatus, loadi
 // Main Page
 // ---------------------------------------------------------------------------
 export function AdminUsersPage() {
-  const { currentUser, logout } = useAuth();
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
   const [users, setUsers] = useState([]);

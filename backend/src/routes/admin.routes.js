@@ -16,4 +16,19 @@ router.get('/users', adminController.getUsers);
 // PATCH /api/admin/users/:id/status
 router.patch('/users/:id/status', adminController.patchUserStatus);
 
+// GET /api/admin/invoices?search=&status=&paymentMethod=&dateFrom=&dateTo=
+router.get('/invoices', adminController.getInvoices);
+
+// GET /api/admin/invoices/:id
+router.get('/invoices/:id', adminController.getInvoiceById);
+
+// PATCH /api/admin/invoices/:id/status
+router.patch('/invoices/:id/status', adminController.patchInvoiceStatus);
+
+// GET /api/admin/resources?search=&type=&status=
+router.get('/resources', adminController.getResources);
+
+// PATCH /api/admin/resources/:id/status
+router.patch('/resources/:id/status', adminController.patchResourceStatus);
+
 export default router;
