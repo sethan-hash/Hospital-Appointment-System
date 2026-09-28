@@ -142,43 +142,31 @@ const COMMON_SPECIALTIES = [
   'Psychiatry',
 ];
 
+const INITIAL_DOCTOR_FORM = {
+  fullName: '',
+  email: '',
+  phone: '',
+  password: '',
+  specialization: '',
+  department: '',
+  qualification: '',
+  experienceYears: '',
+  consultationFee: '',
+  hospitalName: 'Apollo Hospitals Bengaluru',
+  bio: '',
+  isAvailable: true,
+  createDefaultSchedule: true,
+};
+
 function AddDoctorModal({ isOpen, onClose, onSuccess }) {
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    password: '',
-    specialization: 'Cardiology',
-    department: 'Cardiology',
-    qualification: '',
-    experienceYears: 5,
-    consultationFee: 800,
-    hospitalName: 'Apollo Hospitals Bengaluru',
-    bio: '',
-    isAvailable: true,
-    createDefaultSchedule: true,
-  });
+  const [formData, setFormData] = useState(INITIAL_DOCTOR_FORM);
 
   const [formErrors, setFormErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [generalError, setGeneralError] = useState(null);
 
   const resetForm = () => {
-    setFormData({
-      fullName: '',
-      email: '',
-      phone: '',
-      password: '',
-      specialization: 'Cardiology',
-      department: 'Cardiology',
-      qualification: '',
-      experienceYears: 5,
-      consultationFee: 800,
-      hospitalName: 'Apollo Hospitals Bengaluru',
-      bio: '',
-      isAvailable: true,
-      createDefaultSchedule: true,
-    });
+    setFormData(INITIAL_DOCTOR_FORM);
     setFormErrors({});
     setGeneralError(null);
   };
@@ -223,16 +211,22 @@ function AddDoctorModal({ isOpen, onClose, onSuccess }) {
       errs.password = 'Initial password must be at least 6 characters.';
     }
     if (!formData.specialization.trim()) {
-      errs.specialization = 'Specialization is required.';
+      errs.specialization = 'Please select a specialization.';
     }
     if (!formData.qualification.trim()) {
       errs.qualification = 'Qualifications are required (e.g. MBBS, MD).';
     }
-    if (formData.experienceYears < 0 || formData.experienceYears > 70) {
-      errs.experienceYears = 'Experience must be between 0 and 70 years.';
+    if (formData.experienceYears !== '' && formData.experienceYears !== undefined && formData.experienceYears !== null) {
+      const exp = Number(formData.experienceYears);
+      if (isNaN(exp) || exp < 0 || exp > 70) {
+        errs.experienceYears = 'Experience must be between 0 and 70 years.';
+      }
     }
-    if (formData.consultationFee < 0) {
-      errs.consultationFee = 'Fee must be non-negative.';
+    if (formData.consultationFee !== '' && formData.consultationFee !== undefined && formData.consultationFee !== null) {
+      const fee = Number(formData.consultationFee);
+      if (isNaN(fee) || fee < 0) {
+        errs.consultationFee = 'Fee must be non-negative.';
+      }
     }
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
@@ -254,8 +248,14 @@ function AddDoctorModal({ isOpen, onClose, onSuccess }) {
         specialization: formData.specialization.trim(),
         department: (formData.department || formData.specialization).trim(),
         qualification: formData.qualification.trim(),
-        experienceYears: Number(formData.experienceYears),
-        consultationFee: Number(formData.consultationFee),
+        experienceYears:
+          formData.experienceYears !== '' && formData.experienceYears !== undefined
+            ? Number(formData.experienceYears)
+            : undefined,
+        consultationFee:
+          formData.consultationFee !== '' && formData.consultationFee !== undefined
+            ? Number(formData.consultationFee)
+            : undefined,
         hospitalName: (formData.hospitalName || 'Apollo Hospitals Bengaluru').trim(),
         bio: formData.bio ? formData.bio.trim() : '',
         isAvailable: formData.isAvailable,
@@ -335,27 +335,17 @@ function AddDoctorModal({ isOpen, onClose, onSuccess }) {
             error={formErrors.password}
           />
 
-          <div className="flex flex-col gap-1 w-full">
-            <label htmlFor="doctor-specialization" className="font-label-md text-label-md text-on-surface-variant font-medium ml-1">
-              Specialization <span className="text-error">*</span>
-            </label>
-            <input
-              id="doctor-specialization"
-              name="specialization"
-              list="specialty-options"
-              value={formData.specialization}
-              onChange={handleChange}
-              placeholder="e.g. Cardiology"
-              required
-              className="w-full rounded-lg border bg-surface-container-lowest p-3 font-body-md text-on-surface border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-            />
-            <datalist id="specialty-options">
-              {COMMON_SPECIALTIES.map((s) => (
-                <option key={s} value={s} />
-              ))}
-            </datalist>
-            {formErrors.specialization && <span className="text-xs text-error ml-1">{formErrors.specialization}</span>}
-          </div>
+          <Select
+            id="doctor-specialization"
+            name="specialization"
+            label="Specialization"
+            placeholder="Select specialization..."
+            options={COMMON_SPECIALTIES.map((s) => ({ label: s, value: s }))}
+            value={formData.specialization}
+            onChange={handleChange}
+            error={formErrors.specialization}
+            required
+          />
 
           <Input
             id="doctor-department"
@@ -395,6 +385,7 @@ function AddDoctorModal({ isOpen, onClose, onSuccess }) {
             min="0"
             max="70"
             label="Experience (Years)"
+            placeholder="e.g. 5"
             value={formData.experienceYears}
             onChange={handleChange}
             error={formErrors.experienceYears}
@@ -407,6 +398,7 @@ function AddDoctorModal({ isOpen, onClose, onSuccess }) {
             min="0"
             step="50"
             label="Consultation Fee (₹)"
+            placeholder="e.g. 800"
             value={formData.consultationFee}
             onChange={handleChange}
             error={formErrors.consultationFee}
@@ -870,11 +862,13 @@ export function AdminUsersPage() {
       {/* ------------------------------------------------------------------ */}
       {/* Add Doctor Modal */}
       {/* ------------------------------------------------------------------ */}
-      <AddDoctorModal
-        isOpen={isAddDoctorOpen}
-        onClose={() => setIsAddDoctorOpen(false)}
-        onSuccess={handleAddDoctorSuccess}
-      />
+      {isAddDoctorOpen && (
+        <AddDoctorModal
+          isOpen={isAddDoctorOpen}
+          onClose={() => setIsAddDoctorOpen(false)}
+          onSuccess={handleAddDoctorSuccess}
+        />
+      )}
     </div>
   );
 }
