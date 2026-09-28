@@ -31,6 +31,7 @@ export const env = {
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'medlink_care',
     connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT, 10) || 10,
+    ssl: process.env.DB_SSL === 'true',
   },
   jwt: {
     // F-01 — No fallback; process will have already thrown above if secret is absent.
