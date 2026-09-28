@@ -25,6 +25,7 @@
     "test:security-hardening": "node backend/src/scripts/testSecurityHardening.js",
     "test:admin-dashboard": "node backend/src/scripts/testAdminDashboard.js",
     "test:admin-users": "node backend/src/scripts/testAdminUserManagement.js",
+    "test:admin-create-doctor": "node backend/src/scripts/testAdminCreateDoctor.js",
     "test:admin-billing-resources": "node backend/src/scripts/testAdminBillingResources.js"
   },
   "dependencies": {

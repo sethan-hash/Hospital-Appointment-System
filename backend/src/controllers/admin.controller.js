@@ -249,3 +249,23 @@ export async function patchResourceStatus(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * POST /api/admin/doctors
+ * Creates a new Doctor user and doctor profile atomically.
+ * Admin identity is verified from req.user.id.
+ */
+export async function createDoctor(req, res, next) {
+  try {
+    const adminUserId = req.user.id;
+    const result = await adminService.createDoctor(adminUserId, req.body);
+
+    res.status(201).json({
+      success: true,
+      message: 'Doctor account created successfully.',
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+}

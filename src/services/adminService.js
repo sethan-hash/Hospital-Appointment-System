@@ -100,6 +100,31 @@ export const adminService = {
   },
 
   /**
+   * Creates a new doctor account with user + doctor profile atomically.
+   * Maps to POST /api/admin/doctors
+   *
+   * @param {object} doctorData
+   * @returns {Promise<object>}
+   */
+  async createDoctor(doctorData) {
+    const response = await fetch(`${API_BASE_URL}/admin/doctors`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(doctorData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const err = new Error(errorData.message || `Failed to create doctor (${response.status})`);
+      err.errors = errorData.errors;
+      throw err;
+    }
+
+    const payload = await response.json();
+    return payload.data;
+  },
+
+  /**
    * Lists hospital invoices with optional search, status, paymentMethod, and date filters.
    * Maps to GET /api/admin/invoices
    *

@@ -8,6 +8,7 @@ import { Badge } from '../../components/common/Badge';
 import { Input } from '../../components/common/Input';
 import { Select } from '../../components/common/Select';
 import { Modal } from '../../components/common/Modal';
+import { TextArea } from '../../components/common/TextArea';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -126,6 +127,342 @@ function StatusConfirmModal({ isOpen, onClose, onConfirm, user, newStatus, loadi
 }
 
 // ---------------------------------------------------------------------------
+// Add Doctor Modal
+// ---------------------------------------------------------------------------
+const COMMON_SPECIALTIES = [
+  'Cardiology',
+  'Paediatrics',
+  'Neurology',
+  'Dermatology',
+  'Orthopaedics',
+  'General Medicine',
+  'Oncology',
+  'Gynaecology',
+  'ENT',
+  'Psychiatry',
+];
+
+function AddDoctorModal({ isOpen, onClose, onSuccess }) {
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    phone: '',
+    password: '',
+    specialization: 'Cardiology',
+    department: 'Cardiology',
+    qualification: '',
+    experienceYears: 5,
+    consultationFee: 800,
+    hospitalName: 'Apollo Hospitals Bengaluru',
+    bio: '',
+    isAvailable: true,
+    createDefaultSchedule: true,
+  });
+
+  const [formErrors, setFormErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [generalError, setGeneralError] = useState(null);
+
+  const resetForm = () => {
+    setFormData({
+      fullName: '',
+      email: '',
+      phone: '',
+      password: '',
+      specialization: 'Cardiology',
+      department: 'Cardiology',
+      qualification: '',
+      experienceYears: 5,
+      consultationFee: 800,
+      hospitalName: 'Apollo Hospitals Bengaluru',
+      bio: '',
+      isAvailable: true,
+      createDefaultSchedule: true,
+    });
+    setFormErrors({});
+    setGeneralError(null);
+  };
+
+  const handleClose = () => {
+    if (!submitting) {
+      resetForm();
+      onClose();
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => {
+      const updated = {
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value,
+      };
+      if (name === 'specialization' && (!prev.department || prev.department === prev.specialization)) {
+        updated.department = value;
+      }
+      return updated;
+    });
+
+    if (formErrors[name]) {
+      setFormErrors((prev) => ({ ...prev, [name]: null }));
+    }
+  };
+
+  const validate = () => {
+    const errs = {};
+    if (!formData.fullName.trim() || formData.fullName.trim().length < 2) {
+      errs.fullName = 'Full name is required (min 2 characters).';
+    }
+    if (!formData.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      errs.email = 'A valid email address is required.';
+    }
+    if (!formData.phone.trim() || formData.phone.trim().length < 6) {
+      errs.phone = 'Phone number is required (min 6 digits).';
+    }
+    if (formData.password && formData.password.length < 6) {
+      errs.password = 'Initial password must be at least 6 characters.';
+    }
+    if (!formData.specialization.trim()) {
+      errs.specialization = 'Specialization is required.';
+    }
+    if (!formData.qualification.trim()) {
+      errs.qualification = 'Qualifications are required (e.g. MBBS, MD).';
+    }
+    if (formData.experienceYears < 0 || formData.experienceYears > 70) {
+      errs.experienceYears = 'Experience must be between 0 and 70 years.';
+    }
+    if (formData.consultationFee < 0) {
+      errs.consultationFee = 'Fee must be non-negative.';
+    }
+    setFormErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validate()) return;
+
+    setSubmitting(true);
+    setGeneralError(null);
+
+    try {
+      const payload = {
+        fullName: formData.fullName.trim(),
+        email: formData.email.trim().toLowerCase(),
+        phone: formData.phone.trim(),
+        password: formData.password ? formData.password.trim() : undefined,
+        specialization: formData.specialization.trim(),
+        department: (formData.department || formData.specialization).trim(),
+        qualification: formData.qualification.trim(),
+        experienceYears: Number(formData.experienceYears),
+        consultationFee: Number(formData.consultationFee),
+        hospitalName: (formData.hospitalName || 'Apollo Hospitals Bengaluru').trim(),
+        bio: formData.bio ? formData.bio.trim() : '',
+        isAvailable: formData.isAvailable,
+        createDefaultSchedule: formData.createDefaultSchedule,
+      };
+
+      const result = await adminService.createDoctor(payload);
+      resetForm();
+      onSuccess(result);
+    } catch (err) {
+      setGeneralError(err.message || 'Failed to create doctor account.');
+      if (err.errors && Array.isArray(err.errors)) {
+        const errMap = {};
+        err.errors.forEach((e) => {
+          if (e.field) errMap[e.field] = e.message;
+        });
+        setFormErrors(errMap);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={handleClose} title="Add New Doctor" maxWidth="max-w-2xl">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {generalError && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-error-container/20 border border-error/30 text-error text-sm">
+            <Icon name="error" className="text-lg shrink-0" />
+            <span>{generalError}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            id="doctor-fullName"
+            name="fullName"
+            label="Full Name"
+            placeholder="Dr. Anjali Menon"
+            value={formData.fullName}
+            onChange={handleChange}
+            error={formErrors.fullName}
+            required
+          />
+
+          <Input
+            id="doctor-email"
+            name="email"
+            type="email"
+            label="Email Address"
+            placeholder="anjali.menon@apollohospitals.com"
+            value={formData.email}
+            onChange={handleChange}
+            error={formErrors.email}
+            required
+          />
+
+          <Input
+            id="doctor-phone"
+            name="phone"
+            label="Phone Number"
+            placeholder="+91 98450 11223"
+            value={formData.phone}
+            onChange={handleChange}
+            error={formErrors.phone}
+            required
+          />
+
+          <Input
+            id="doctor-password"
+            name="password"
+            type="password"
+            label="Initial Password (Optional)"
+            placeholder="Leave blank to auto-generate"
+            value={formData.password}
+            onChange={handleChange}
+            error={formErrors.password}
+          />
+
+          <div className="flex flex-col gap-1 w-full">
+            <label htmlFor="doctor-specialization" className="font-label-md text-label-md text-on-surface-variant font-medium ml-1">
+              Specialization <span className="text-error">*</span>
+            </label>
+            <input
+              id="doctor-specialization"
+              name="specialization"
+              list="specialty-options"
+              value={formData.specialization}
+              onChange={handleChange}
+              placeholder="e.g. Cardiology"
+              required
+              className="w-full rounded-lg border bg-surface-container-lowest p-3 font-body-md text-on-surface border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+            />
+            <datalist id="specialty-options">
+              {COMMON_SPECIALTIES.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+            {formErrors.specialization && <span className="text-xs text-error ml-1">{formErrors.specialization}</span>}
+          </div>
+
+          <Input
+            id="doctor-department"
+            name="department"
+            label="Department"
+            placeholder="e.g. Cardiology"
+            value={formData.department}
+            onChange={handleChange}
+            error={formErrors.department}
+          />
+
+          <Input
+            id="doctor-qualification"
+            name="qualification"
+            label="Qualifications"
+            placeholder="e.g. MBBS, MD, DM"
+            value={formData.qualification}
+            onChange={handleChange}
+            error={formErrors.qualification}
+            required
+          />
+
+          <Input
+            id="doctor-hospitalName"
+            name="hospitalName"
+            label="Hospital / Branch"
+            placeholder="Apollo Hospitals Bengaluru"
+            value={formData.hospitalName}
+            onChange={handleChange}
+            error={formErrors.hospitalName}
+          />
+
+          <Input
+            id="doctor-experienceYears"
+            name="experienceYears"
+            type="number"
+            min="0"
+            max="70"
+            label="Experience (Years)"
+            value={formData.experienceYears}
+            onChange={handleChange}
+            error={formErrors.experienceYears}
+          />
+
+          <Input
+            id="doctor-consultationFee"
+            name="consultationFee"
+            type="number"
+            min="0"
+            step="50"
+            label="Consultation Fee (₹)"
+            value={formData.consultationFee}
+            onChange={handleChange}
+            error={formErrors.consultationFee}
+          />
+        </div>
+
+        <TextArea
+          id="doctor-bio"
+          name="bio"
+          label="Professional Bio"
+          placeholder="Brief professional background and medical specializations..."
+          rows={3}
+          value={formData.bio}
+          onChange={handleChange}
+          error={formErrors.bio}
+        />
+
+        <div className="flex flex-col sm:flex-row gap-4 p-3 bg-surface-container-low rounded-xl border border-outline-variant/30">
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-on-surface">
+            <input
+              type="checkbox"
+              name="isAvailable"
+              checked={formData.isAvailable}
+              onChange={handleChange}
+              className="rounded text-primary focus:ring-primary w-4 h-4"
+            />
+            <span>Available for Bookings</span>
+          </label>
+
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-on-surface">
+            <input
+              type="checkbox"
+              name="createDefaultSchedule"
+              checked={formData.createDefaultSchedule}
+              onChange={handleChange}
+              className="rounded text-primary focus:ring-primary w-4 h-4"
+            />
+            <span>Create Default Weekly Schedule (Mon–Fri 9am–5pm)</span>
+          </label>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2 border-t border-outline-variant/20">
+          <Button variant="outline" size="sm" type="button" onClick={handleClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button variant="primary" size="sm" type="submit" loading={submitting}>
+            <Icon name="person_add" className="text-base mr-1" />
+            Create Doctor Account
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 export function AdminUsersPage() {
@@ -141,6 +478,9 @@ export function AdminUsersPage() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+
+  // Add doctor modal state
+  const [isAddDoctorOpen, setIsAddDoctorOpen] = useState(false);
 
   // Status update modal state
   const [confirmModal, setConfirmModal] = useState({
@@ -244,6 +584,16 @@ export function AdminUsersPage() {
     }
   };
 
+  const handleAddDoctorSuccess = (createdData) => {
+    const docName = createdData.doctor?.name || createdData.user?.fullName || 'Doctor';
+    const tempPass = createdData.temporaryPassword;
+    setStatusSuccess(
+      `Doctor ${docName} created successfully with role DOCTOR.${tempPass ? ` Temporary password: ${tempPass}` : ''}`
+    );
+    setIsAddDoctorOpen(false);
+    fetchUsers();
+  };
+
   // Dismiss transient success/error banners
   useEffect(() => {
     if (!statusSuccess) return;
@@ -288,15 +638,28 @@ export function AdminUsersPage() {
             </p>
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={loading}
-          >
-            <Icon name="refresh" className={`text-base mr-1 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsAddDoctorOpen(true)}
+              id="admin-add-doctor-btn"
+              className="flex items-center gap-1.5 shadow-sm"
+            >
+              <Icon name="person_add" className="text-base" />
+              <span>Add Doctor</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={loading}
+              id="admin-refresh-btn"
+            >
+              <Icon name="refresh" className={`text-base mr-1 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {/* ------------------------------------------------------------------ */}
@@ -502,6 +865,15 @@ export function AdminUsersPage() {
         user={confirmModal.user}
         newStatus={confirmModal.newStatus}
         loading={statusLoading}
+      />
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Add Doctor Modal */}
+      {/* ------------------------------------------------------------------ */}
+      <AddDoctorModal
+        isOpen={isAddDoctorOpen}
+        onClose={() => setIsAddDoctorOpen(false)}
+        onSuccess={handleAddDoctorSuccess}
       />
     </div>
   );
