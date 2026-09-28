@@ -18,7 +18,7 @@ const USER_SAFE_COLS = 'u.id, u.role, u.full_name, u.email, u.phone, u.status, u
 export async function getAdminDashboardMetrics(adminUserId) {
   // 1. Verify admin user identity and status
   const [adminRows] = await pool.query(
-    'SELECT id, role, full_name, email, phone, status FROM users WHERE id = ? AND role = "ADMIN" LIMIT 1;',
+    'SELECT id, role, full_name, email, phone, status FROM users WHERE id = ? AND role = \'ADMIN\' LIMIT 1;',
     [adminUserId]
   );
 
@@ -53,16 +53,16 @@ export async function getAdminDashboardMetrics(adminUserId) {
     pool.query('SELECT COUNT(*) AS count FROM doctors;'),
     pool.query('SELECT COUNT(*) AS count FROM doctors WHERE is_available = TRUE;'),
     pool.query('SELECT COUNT(*) AS count FROM appointments WHERE appointment_date = CURDATE();'),
-    pool.query('SELECT COUNT(*) AS count FROM appointments WHERE appointment_date >= CURDATE() AND status = "SCHEDULED";'),
-    pool.query('SELECT COUNT(*) AS count FROM appointments WHERE status = "COMPLETED";'),
-    pool.query('SELECT COUNT(*) AS count FROM appointments WHERE status = "CANCELLED";'),
+    pool.query('SELECT COUNT(*) AS count FROM appointments WHERE appointment_date >= CURDATE() AND status = \'SCHEDULED\';'),
+    pool.query('SELECT COUNT(*) AS count FROM appointments WHERE status = \'COMPLETED\';'),
+    pool.query('SELECT COUNT(*) AS count FROM appointments WHERE status = \'CANCELLED\';'),
     pool.query('SELECT COUNT(*) AS count FROM appointments;'),
     pool.query('SELECT COUNT(*) AS count FROM invoices;'),
-    pool.query('SELECT COUNT(*) AS count, COALESCE(SUM(total_amount), 0) AS total FROM invoices WHERE payment_status = "PAID";'),
-    pool.query('SELECT COUNT(*) AS count, COALESCE(SUM(total_amount), 0) AS total FROM invoices WHERE payment_status = "PENDING";'),
+    pool.query('SELECT COUNT(*) AS count, COALESCE(SUM(total_amount), 0) AS total FROM invoices WHERE payment_status = \'PAID\';'),
+    pool.query('SELECT COUNT(*) AS count, COALESCE(SUM(total_amount), 0) AS total FROM invoices WHERE payment_status = \'PENDING\';'),
     pool.query('SELECT COUNT(*) AS count FROM resources;'),
-    pool.query('SELECT COUNT(*) AS count FROM resources WHERE status = "AVAILABLE";'),
-    pool.query('SELECT COUNT(*) AS count FROM resources WHERE status = "OCCUPIED";'),
+    pool.query('SELECT COUNT(*) AS count FROM resources WHERE status = \'AVAILABLE\';'),
+    pool.query('SELECT COUNT(*) AS count FROM resources WHERE status = \'OCCUPIED\';'),
     pool.query(`
       SELECT 
         a.id,
