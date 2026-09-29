@@ -48,20 +48,6 @@ export function LoginPage() {
     }
   };
 
-  const handleBiometricLogin = async () => {
-    setIsLoading(true);
-    setErrors({});
-    try {
-      const user = await login('rahul.verma@example.in', 'Password123!');
-      const targetDashboard = getDashboardPathForRole(user.role);
-      navigate(targetDashboard);
-    } catch (err) {
-      setErrors({ form: err.message || 'Biometric authentication failed.' });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <AuthLayout>
       <div className="flex flex-col gap-8 w-full max-w-md px-2">
@@ -146,29 +132,6 @@ export function LoginPage() {
             Sign In
           </Button>
         </form>
-
-        {/* Biometrics & Divider */}
-        <div className="flex flex-col gap-6 items-center">
-          <div className="flex items-center w-full gap-4">
-            <div className="h-px bg-outline-variant/40 flex-1" />
-            <span className="font-label-md text-label-md text-outline font-semibold">
-              OR
-            </span>
-            <div className="h-px bg-outline-variant/40 flex-1" />
-          </div>
-
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            rounded="full"
-            fullWidth
-            iconLeading="fingerprint"
-            onClick={handleBiometricLogin}
-          >
-            Login with Biometrics
-          </Button>
-        </div>
 
         {/* Footer */}
         <div className="text-center pt-2">
