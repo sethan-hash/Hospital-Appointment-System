@@ -23,6 +23,27 @@ function formatTime(t) {
   return `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
+/** Formats "YYYY-MM-DD" → "18 Sep 2026" without timezone drift */
+function formatApptDate(dStr) {
+  if (!dStr) return '';
+  const parts = dStr.split('-');
+  if (parts.length === 3) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const mIdx = parseInt(parts[1], 10) - 1;
+    return `${parseInt(parts[2], 10)} ${months[mIdx] || ''} ${parts[0]}`;
+  }
+  return dStr;
+}
+
+/** Returns local date in YYYY-MM-DD */
+function getTodayDateString() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 /** Maps appointment status to Badge variant */
 const STATUS_VARIANT = {
   SCHEDULED: 'scheduled',
@@ -46,7 +67,7 @@ const AVAIL_VARIANT = {
 
 // ─── Appointment Row ─────────────────────────────────────────────────────────
 
-function AppointmentRow({ appt, onSelect }) {
+function AppointmentRow({ appt, onSelect, showDate = false }) {
   const typeIcon = appt.type === 'TELECONSULTATION' ? 'videocam' : 'local_hospital';
   const typeLabel = appt.type === 'TELECONSULTATION' ? 'Tele' : 'In-Person';
 
@@ -63,8 +84,13 @@ function AppointmentRow({ appt, onSelect }) {
       }}
       className="flex items-center gap-4 p-3 rounded-xl bg-surface-container-lowest border border-outline-variant/10 hover:bg-surface-container transition-colors cursor-pointer group"
     >
-      {/* Time */}
-      <div className="w-16 shrink-0 text-center">
+      {/* Date & Time */}
+      <div className={`${showDate ? 'w-24 sm:w-28' : 'w-16'} shrink-0 text-center`}>
+        {showDate && appt.appointmentDate && (
+          <p className="font-label-sm text-on-surface-variant text-xs mb-0.5 font-medium whitespace-nowrap">
+            {formatApptDate(appt.appointmentDate)}
+          </p>
+        )}
         <p className="font-label-lg text-primary font-semibold text-sm">
           {formatTime(appt.appointmentTime)}
         </p>
@@ -152,7 +178,47 @@ export function DoctorDashboardPage() {
   // ── Derived values ─────────────────────────────────────────────────────────
   const doctor = dashboard?.doctor;
   const stats = dashboard?.statistics;
-  const todayAppointments = dashboard?.todayAppointments || [];
+  const todayStr = getTodayDateString();
+
+  // Keep Today's Schedule strictly for today's appointments
+  const todayAppointments = (dashboard?.todayAppointments || []).filter((appt) => {
+    return !appt.appointmentDate || appt.appointmentDate === todayStr;
+  });
+
+  // Collect scheduled appointments where appointment_date > today
+  const rawUpcoming = [
+    ...(dashboard?.upcomingAppointments || []),
+    ...(dashboard?.todayAppointments || []).filter(
+      (appt) => appt.appointmentDate && appt.appointmentDate > todayStr
+    ),
+  ];
+
+  // Prevent duplicate appointments between Today's Schedule and Upcoming Appointments
+  const todayIds = new Set(todayAppointments.map((a) => a.id));
+  const seenUpcomingIds = new Set();
+  const upcomingAppointments = [];
+
+  for (const appt of rawUpcoming) {
+    const isFuture = appt.appointmentDate ? appt.appointmentDate > todayStr : false;
+    const isScheduled = !appt.status || appt.status === 'SCHEDULED';
+    if (isFuture && isScheduled && !todayIds.has(appt.id) && !seenUpcomingIds.has(appt.id)) {
+      seenUpcomingIds.add(appt.id);
+      upcomingAppointments.push(appt);
+    }
+  }
+
+  upcomingAppointments.sort((a, b) => {
+    if (a.appointmentDate !== b.appointmentDate) {
+      return (a.appointmentDate || '').localeCompare(b.appointmentDate || '');
+    }
+    return (a.appointmentTime || '').localeCompare(b.appointmentTime || '');
+  });
+
+  // Keep "Upcoming Scheduled" metric consistent with the section
+  const upcomingScheduledCount =
+    stats?.upcomingTotal !== undefined
+      ? Math.max(stats.upcomingTotal, upcomingAppointments.length)
+      : upcomingAppointments.length;
 
   // Get first letter for avatar initials
   const initials = doctor?.name
@@ -282,7 +348,7 @@ export function DoctorDashboardPage() {
               <StatCard
                 icon="schedule"
                 iconColor="tertiary"
-                value={String(stats.upcomingTotal)}
+                value={String(upcomingScheduledCount)}
                 label="Upcoming Scheduled"
               />
               <StatCard
@@ -318,6 +384,39 @@ export function DoctorDashboardPage() {
                     <AppointmentRow
                       key={appt.id}
                       appt={appt}
+                      onSelect={(id) => setSelectedAppointmentId(id)}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Upcoming Appointments */}
+            <div className="bg-surface-container-low rounded-2xl border border-outline-variant/30 overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-4 border-b border-outline-variant/20">
+                <Icon name="schedule" className="text-primary" />
+                <h2 className="font-title-md font-semibold text-on-surface">
+                  Upcoming Appointments
+                </h2>
+                <span className="ml-auto text-xs text-on-surface-variant">
+                  {upcomingAppointments.length === 0
+                    ? 'No upcoming appointments'
+                    : `${upcomingAppointments.length} appointment${upcomingAppointments.length !== 1 ? 's' : ''}`}
+                </span>
+              </div>
+
+              <div className="p-4 flex flex-col gap-3">
+                {upcomingAppointments.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-2 text-on-surface-variant">
+                    <Icon name="event_upcoming" className="text-4xl opacity-40" />
+                    <p className="text-sm">No upcoming appointments scheduled.</p>
+                  </div>
+                ) : (
+                  upcomingAppointments.map((appt) => (
+                    <AppointmentRow
+                      key={appt.id}
+                      appt={appt}
+                      showDate={true}
                       onSelect={(id) => setSelectedAppointmentId(id)}
                     />
                   ))
