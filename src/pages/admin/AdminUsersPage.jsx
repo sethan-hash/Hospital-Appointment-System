@@ -14,12 +14,11 @@ import { TextArea } from '../../components/common/TextArea';
 // Helpers
 // ---------------------------------------------------------------------------
 
-const ROLE_OPTIONS = [
-  { label: 'All Roles', value: '' },
-  { label: 'Patient', value: 'PATIENT' },
-  { label: 'Doctor', value: 'DOCTOR' },
-  { label: 'Receptionist', value: 'RECEPTIONIST' },
-  { label: 'Admin', value: 'ADMIN' },
+const ROLE_TABS = [
+  { key: 'DOCTOR', label: 'Doctors', icon: 'stethoscope' },
+  { key: 'PATIENT', label: 'Patients', icon: 'person' },
+  { key: 'RECEPTIONIST', label: 'Receptionists', icon: 'badge' },
+  { key: 'ADMIN', label: 'Administrators', icon: 'admin_panel_settings' },
 ];
 
 const STATUS_OPTIONS = [
@@ -458,8 +457,11 @@ function AddDoctorModal({ isOpen, onClose, onSuccess }) {
 // Main Page
 // ---------------------------------------------------------------------------
 export function AdminUsersPage() {
-  const { logout } = useAuth();
+  const { user: currentAdmin, logout } = useAuth();
   const navigate = useNavigate();
+
+  // Role Tab State (DOCTOR, PATIENT, RECEPTIONIST, ADMIN)
+  const [activeTab, setActiveTab] = useState('DOCTOR');
 
   const [users, setUsers] = useState([]);
   const [total, setTotal] = useState(0);
@@ -468,7 +470,6 @@ export function AdminUsersPage() {
 
   // Filters
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
   // Add doctor modal state
@@ -492,9 +493,10 @@ export function AdminUsersPage() {
       setLoading(true);
       setError(null);
       try {
+        const effectiveRole = roleVal !== undefined ? roleVal : activeTab;
         const data = await adminService.getUsers({
           search: searchVal ?? search,
-          role: roleVal ?? roleFilter,
+          role: effectiveRole,
           status: statusVal ?? statusFilter,
         });
         setUsers(data.users);
@@ -505,12 +507,12 @@ export function AdminUsersPage() {
         setLoading(false);
       }
     },
-    [search, roleFilter, statusFilter]
+    [search, activeTab, statusFilter]
   );
 
-  // Initial load
+  // Initial load: defaults to DOCTOR tab
   useEffect(() => {
-    fetchUsers({ searchVal: '', roleVal: '', statusVal: '' });
+    fetchUsers({ searchVal: '', roleVal: 'DOCTOR', statusVal: '' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -524,10 +526,10 @@ export function AdminUsersPage() {
     }, 350);
   };
 
-  const handleRoleChange = (e) => {
-    const val = e.target.value;
-    setRoleFilter(val);
-    fetchUsers({ roleVal: val });
+  const handleTabChange = (newTab) => {
+    if (newTab === activeTab) return;
+    setActiveTab(newTab);
+    fetchUsers({ roleVal: newTab });
   };
 
   const handleStatusChange = (e) => {
@@ -543,8 +545,12 @@ export function AdminUsersPage() {
     navigate('/login');
   };
 
-  // Open status confirm modal
+  // Open status confirm modal with admin lockout safeguards
   const openStatusModal = (user, newStatus) => {
+    if (user.role === 'ADMIN' && user.id === currentAdmin?.id && newStatus !== 'ACTIVE') {
+      setStatusError('You cannot deactivate your own administrator account.');
+      return;
+    }
     setStatusError(null);
     setStatusSuccess(null);
     setConfirmModal({ open: true, user, newStatus });
@@ -583,7 +589,8 @@ export function AdminUsersPage() {
       `Doctor ${docName} created successfully with role DOCTOR.${tempPass ? ` Temporary password: ${tempPass}` : ''}`
     );
     setIsAddDoctorOpen(false);
-    fetchUsers();
+    setActiveTab('DOCTOR');
+    fetchUsers({ roleVal: 'DOCTOR' });
   };
 
   // Dismiss transient success/error banners
@@ -592,6 +599,8 @@ export function AdminUsersPage() {
     const t = setTimeout(() => setStatusSuccess(null), 4000);
     return () => clearTimeout(t);
   }, [statusSuccess]);
+
+  const currentTabInfo = ROLE_TABS.find((t) => t.key === activeTab) || ROLE_TABS[0];
 
   return (
     <div className="min-h-screen bg-surface flex flex-col">
@@ -626,21 +635,23 @@ export function AdminUsersPage() {
               <span>User Management</span>
             </h1>
             <p className="text-sm text-on-surface-variant mt-0.5">
-              View, search, and manage all platform accounts.
+              View, search, and manage platform accounts separated by role.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsAddDoctorOpen(true)}
-              id="admin-add-doctor-btn"
-              className="flex items-center gap-1.5 shadow-sm"
-            >
-              <Icon name="person_add" className="text-base" />
-              <span>Add Doctor</span>
-            </Button>
+            {activeTab === 'DOCTOR' && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsAddDoctorOpen(true)}
+                id="admin-add-doctor-btn"
+                className="flex items-center gap-1.5 shadow-sm"
+              >
+                <Icon name="person_add" className="text-base" />
+                <span>Add Doctor</span>
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -652,6 +663,31 @@ export function AdminUsersPage() {
               Refresh
             </Button>
           </div>
+        </div>
+
+        {/* ------------------------------------------------------------------ */}
+        {/* Role Tabs */}
+        {/* ------------------------------------------------------------------ */}
+        <div className="flex border-b border-outline-variant/20 gap-2 overflow-x-auto">
+          {ROLE_TABS.map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                id={`admin-tab-${tab.key.toLowerCase()}`}
+                onClick={() => handleTabChange(tab.key)}
+                className={`flex items-center gap-2 px-5 py-3 font-semibold text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+                  isActive
+                    ? 'border-primary text-primary bg-primary/5 rounded-t-xl'
+                    : 'border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-t-xl'
+                }`}
+              >
+                <Icon name={tab.icon} className="text-lg" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* ------------------------------------------------------------------ */}
@@ -677,22 +713,13 @@ export function AdminUsersPage() {
           <div className="flex-1">
             <Input
               id="admin-user-search"
-              placeholder="Search by name or email…"
+              placeholder={`Search ${currentTabInfo.label.toLowerCase()} by name or email…`}
               iconLeading="search"
               value={search}
               onChange={handleSearchChange}
             />
           </div>
-          <div className="w-full sm:w-44">
-            <Select
-              id="admin-role-filter"
-              placeholder=""
-              options={ROLE_OPTIONS}
-              value={roleFilter}
-              onChange={handleRoleChange}
-            />
-          </div>
-          <div className="w-full sm:w-44">
+          <div className="w-full sm:w-48">
             <Select
               id="admin-status-filter"
               placeholder=""
@@ -710,8 +737,8 @@ export function AdminUsersPage() {
           <p className="text-sm text-on-surface-variant -mt-2">
             Showing <span className="font-semibold text-on-surface">{users.length}</span>{' '}
             {users.length !== total ? `of ${total} ` : ''}
-            user{users.length !== 1 ? 's' : ''}
-            {search || roleFilter || statusFilter ? ' matching filters' : ''}
+            {currentTabInfo.label.toLowerCase()}
+            {search || statusFilter ? ' matching filters' : ''}
           </p>
         )}
 
@@ -721,7 +748,7 @@ export function AdminUsersPage() {
         {loading && (
           <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant gap-3">
             <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm">Loading users…</p>
+            <p className="text-sm">Loading {currentTabInfo.label.toLowerCase()}…</p>
           </div>
         )}
 
@@ -733,7 +760,7 @@ export function AdminUsersPage() {
             <div className="w-12 h-12 rounded-full bg-error/10 text-error flex items-center justify-center">
               <Icon name="error" className="text-2xl" />
             </div>
-            <h3 className="text-lg font-bold text-on-surface">Unable to Load Users</h3>
+            <h3 className="text-lg font-bold text-on-surface">Unable to Load {currentTabInfo.label}</h3>
             <p className="text-on-surface-variant max-w-md text-sm">{error}</p>
             <Button variant="primary" size="sm" onClick={handleRefresh}>
               Retry
@@ -747,8 +774,12 @@ export function AdminUsersPage() {
         {!loading && !error && users.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant gap-3">
             <Icon name="group_off" className="text-5xl opacity-30" />
-            <p className="text-base font-medium">No users match your filters.</p>
-            <p className="text-sm opacity-70">Try adjusting the search or filter criteria.</p>
+            <p className="text-base font-medium">No {currentTabInfo.label.toLowerCase()} match your filters.</p>
+            <p className="text-sm opacity-70">
+              {search || statusFilter
+                ? 'Try adjusting the search or status filter criteria.'
+                : `No registered ${currentTabInfo.label.toLowerCase()} found.`}
+            </p>
           </div>
         )}
 
@@ -808,7 +839,11 @@ export function AdminUsersPage() {
 
                   {/* Action buttons */}
                   <div className="flex items-center gap-2">
-                    {user.status === 'ACTIVE' ? (
+                    {user.role === 'ADMIN' && user.id === currentAdmin?.id ? (
+                      <span className="text-xs text-on-surface-variant/70 italic px-2">
+                        Current Account
+                      </span>
+                    ) : user.status === 'ACTIVE' ? (
                       <Button
                         variant="outline"
                         size="sm"
