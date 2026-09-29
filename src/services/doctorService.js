@@ -156,7 +156,7 @@ export const doctorService = {
    * @returns {Promise<{ appointment: object, patient: object }>}
    */
   async getAppointmentDetails(id) {
-    const token = localStorage.getItem('auth_token');
+    const token = authService.getToken();
     if (!token) {
       throw new Error('Authentication required.');
     }
@@ -185,7 +185,7 @@ export const doctorService = {
    * GET /api/doctor/appointments/:appointmentId/clinical-record
    */
   async getClinicalRecord(appointmentId) {
-    const token = localStorage.getItem('auth_token');
+    const token = authService.getToken();
     if (!token) throw new Error('Authentication required.');
 
     const response = await fetch(`${API_BASE_URL}/doctor/appointments/${appointmentId}/clinical-record`, {
@@ -212,7 +212,7 @@ export const doctorService = {
    * PUT /api/doctor/appointments/:appointmentId/clinical-record
    */
   async saveClinicalRecord(appointmentId, data) {
-    const token = localStorage.getItem('auth_token');
+    const token = authService.getToken();
     if (!token) throw new Error('Authentication required.');
 
     const response = await fetch(`${API_BASE_URL}/doctor/appointments/${appointmentId}/clinical-record`, {
@@ -240,7 +240,7 @@ export const doctorService = {
    * PUT /api/doctor/appointments/:appointmentId/vitals
    */
   async saveVitals(appointmentId, data) {
-    const token = localStorage.getItem('auth_token');
+    const token = authService.getToken();
     if (!token) throw new Error('Authentication required.');
 
     const response = await fetch(`${API_BASE_URL}/doctor/appointments/${appointmentId}/vitals`, {
@@ -268,7 +268,7 @@ export const doctorService = {
    * POST /api/doctor/medical-records/:recordId/medications
    */
   async addMedication(recordId, data) {
-    const token = localStorage.getItem('auth_token');
+    const token = authService.getToken();
     if (!token) throw new Error('Authentication required.');
 
     const response = await fetch(`${API_BASE_URL}/doctor/medical-records/${recordId}/medications`, {
@@ -296,7 +296,7 @@ export const doctorService = {
    * PUT /api/doctor/medications/:id
    */
   async updateMedication(id, data) {
-    const token = localStorage.getItem('auth_token');
+    const token = authService.getToken();
     if (!token) throw new Error('Authentication required.');
 
     const response = await fetch(`${API_BASE_URL}/doctor/medications/${id}`, {
@@ -324,7 +324,7 @@ export const doctorService = {
    * DELETE /api/doctor/medications/:id
    */
   async deleteMedication(id) {
-    const token = localStorage.getItem('auth_token');
+    const token = authService.getToken();
     if (!token) throw new Error('Authentication required.');
 
     const response = await fetch(`${API_BASE_URL}/doctor/medications/${id}`, {
@@ -353,7 +353,7 @@ export const doctorService = {
    * @returns {Promise<object>} { profile }
    */
   async getProfile() {
-    const token = localStorage.getItem('auth_token');
+    const token = authService.getToken();
     if (!token) throw new Error('Authentication required.');
 
     const response = await fetch(`${API_BASE_URL}/doctor/profile`, {
@@ -383,7 +383,7 @@ export const doctorService = {
    * @returns {Promise<object>} { profile }
    */
   async updateProfile(data) {
-    const token = localStorage.getItem('auth_token');
+    const token = authService.getToken();
     if (!token) throw new Error('Authentication required.');
 
     const response = await fetch(`${API_BASE_URL}/doctor/profile`, {
@@ -413,7 +413,7 @@ export const doctorService = {
    * @returns {Promise<Array<object>>} Array of 7 schedule items
    */
   async getSchedule() {
-    const token = localStorage.getItem('auth_token');
+    const token = authService.getToken();
     if (!token) throw new Error('Authentication required.');
 
     const response = await fetch(`${API_BASE_URL}/doctor/schedule`, {
@@ -443,7 +443,7 @@ export const doctorService = {
    * @returns {Promise<Array<object>>} Updated array of schedule items
    */
   async updateSchedule(scheduleList) {
-    const token = localStorage.getItem('auth_token');
+    const token = authService.getToken();
     if (!token) throw new Error('Authentication required.');
 
     const response = await fetch(`${API_BASE_URL}/doctor/schedule`, {
