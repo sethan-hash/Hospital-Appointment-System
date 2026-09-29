@@ -305,6 +305,29 @@ export async function getDashboardData(userId) {
     [todayStr, todayStr, todayStr, doctorId]
   );
 
+  // 5. Next upcoming SCHEDULED appointments (future dates only, up to 5).
+  //    Returned so the frontend can fall back to these when today has no appointments.
+  const [upcomingRows] = await pool.query(
+    `SELECT
+       a.id,
+       DATE_FORMAT(a.appointment_date, '%Y-%m-%d') AS appointmentDate,
+       TIME_FORMAT(a.appointment_time, '%H:%i')     AS appointmentTime,
+       a.status,
+       a.type,
+       a.reason_for_visit  AS reasonForVisit,
+       p.id                AS patientId,
+       u.full_name         AS patientName
+     FROM appointments a
+     INNER JOIN patients p ON p.id = a.patient_id
+     INNER JOIN users u    ON u.id = p.user_id
+     WHERE a.doctor_id = ?
+       AND a.appointment_date > ?
+       AND a.status = 'SCHEDULED'
+     ORDER BY a.appointment_date ASC, a.appointment_time ASC
+     LIMIT 5;`,
+    [doctorId, todayStr]
+  );
+
   return {
     doctor: {
       id: doctorId,
@@ -319,6 +342,7 @@ export async function getDashboardData(userId) {
       isAvailable: Boolean(doctorRow.isAvailable),
     },
     todayAppointments: todayRows,
+    upcomingAppointments: upcomingRows,
     statistics: {
       todayCount: Number(statsRow.todayCount),
       completedToday: Number(statsRow.completedToday),

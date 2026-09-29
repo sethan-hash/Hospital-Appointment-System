@@ -35,15 +35,6 @@ function formatApptDate(dStr) {
   return dStr;
 }
 
-/** Returns local date in YYYY-MM-DD */
-function getTodayDateString() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
 /** Maps appointment status to Badge variant */
 const STATUS_VARIANT = {
   SCHEDULED: 'scheduled',
@@ -178,47 +169,15 @@ export function DoctorDashboardPage() {
   // ── Derived values ─────────────────────────────────────────────────────────
   const doctor = dashboard?.doctor;
   const stats = dashboard?.statistics;
-  const todayStr = getTodayDateString();
 
-  // Keep Today's Schedule strictly for today's appointments
-  const todayAppointments = (dashboard?.todayAppointments || []).filter((appt) => {
-    return !appt.appointmentDate || appt.appointmentDate === todayStr;
-  });
+  // Today's appointments come directly from the backend (appointment_date = today)
+  const todayAppointments = dashboard?.todayAppointments || [];
 
-  // Collect scheduled appointments where appointment_date > today
-  const rawUpcoming = [
-    ...(dashboard?.upcomingAppointments || []),
-    ...(dashboard?.todayAppointments || []).filter(
-      (appt) => appt.appointmentDate && appt.appointmentDate > todayStr
-    ),
-  ];
+  // Next upcoming SCHEDULED appointments for days after today (fallback display)
+  const upcomingAppointments = dashboard?.upcomingAppointments || [];
 
-  // Prevent duplicate appointments between Today's Schedule and Upcoming Appointments
-  const todayIds = new Set(todayAppointments.map((a) => a.id));
-  const seenUpcomingIds = new Set();
-  const upcomingAppointments = [];
-
-  for (const appt of rawUpcoming) {
-    const isFuture = appt.appointmentDate ? appt.appointmentDate > todayStr : false;
-    const isScheduled = !appt.status || appt.status === 'SCHEDULED';
-    if (isFuture && isScheduled && !todayIds.has(appt.id) && !seenUpcomingIds.has(appt.id)) {
-      seenUpcomingIds.add(appt.id);
-      upcomingAppointments.push(appt);
-    }
-  }
-
-  upcomingAppointments.sort((a, b) => {
-    if (a.appointmentDate !== b.appointmentDate) {
-      return (a.appointmentDate || '').localeCompare(b.appointmentDate || '');
-    }
-    return (a.appointmentTime || '').localeCompare(b.appointmentTime || '');
-  });
-
-  // Keep "Upcoming Scheduled" metric consistent with the section
-  const upcomingScheduledCount =
-    stats?.upcomingTotal !== undefined
-      ? Math.max(stats.upcomingTotal, upcomingAppointments.length)
-      : upcomingAppointments.length;
+  // Upcoming Scheduled count from backend statistics
+  const upcomingScheduledCount = stats?.upcomingTotal ?? 0;
 
   // Get first letter for avatar initials
   const initials = doctor?.name
@@ -367,19 +326,16 @@ export function DoctorDashboardPage() {
                   Today&apos;s Schedule
                 </h2>
                 <span className="ml-auto text-xs text-on-surface-variant">
-                  {todayAppointments.length === 0
-                    ? 'No appointments today'
-                    : `${todayAppointments.length} appointment${todayAppointments.length !== 1 ? 's' : ''}`}
+                  {todayAppointments.length > 0
+                    ? `${todayAppointments.length} appointment${todayAppointments.length !== 1 ? 's' : ''}`
+                    : upcomingAppointments.length > 0
+                    ? 'Next scheduled'
+                    : 'No appointments today'}
                 </span>
               </div>
 
               <div className="p-4 flex flex-col gap-3">
-                {todayAppointments.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 gap-2 text-on-surface-variant">
-                    <Icon name="calendar_today" className="text-4xl opacity-40" />
-                    <p className="text-sm">No appointments scheduled for today.</p>
-                  </div>
-                ) : (
+                {todayAppointments.length > 0 ? (
                   todayAppointments.map((appt) => (
                     <AppointmentRow
                       key={appt.id}
@@ -387,39 +343,25 @@ export function DoctorDashboardPage() {
                       onSelect={(id) => setSelectedAppointmentId(id)}
                     />
                   ))
-                )}
-              </div>
-            </div>
-
-            {/* Upcoming Appointments */}
-            <div className="bg-surface-container-low rounded-2xl border border-outline-variant/30 overflow-hidden">
-              <div className="flex items-center gap-2 px-5 py-4 border-b border-outline-variant/20">
-                <Icon name="schedule" className="text-primary" />
-                <h2 className="font-title-md font-semibold text-on-surface">
-                  Upcoming Appointments
-                </h2>
-                <span className="ml-auto text-xs text-on-surface-variant">
-                  {upcomingAppointments.length === 0
-                    ? 'No upcoming appointments'
-                    : `${upcomingAppointments.length} appointment${upcomingAppointments.length !== 1 ? 's' : ''}`}
-                </span>
-              </div>
-
-              <div className="p-4 flex flex-col gap-3">
-                {upcomingAppointments.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 gap-2 text-on-surface-variant">
-                    <Icon name="event_upcoming" className="text-4xl opacity-40" />
-                    <p className="text-sm">No upcoming appointments scheduled.</p>
-                  </div>
+                ) : upcomingAppointments.length > 0 ? (
+                  <>
+                    <p className="text-xs text-on-surface-variant px-1 pb-1">
+                      No appointments today. Showing next scheduled appointment{upcomingAppointments.length !== 1 ? 's' : ''}:
+                    </p>
+                    {upcomingAppointments.map((appt) => (
+                      <AppointmentRow
+                        key={appt.id}
+                        appt={appt}
+                        showDate={true}
+                        onSelect={(id) => setSelectedAppointmentId(id)}
+                      />
+                    ))}
+                  </>
                 ) : (
-                  upcomingAppointments.map((appt) => (
-                    <AppointmentRow
-                      key={appt.id}
-                      appt={appt}
-                      showDate={true}
-                      onSelect={(id) => setSelectedAppointmentId(id)}
-                    />
-                  ))
+                  <div className="flex flex-col items-center justify-center py-12 gap-2 text-on-surface-variant">
+                    <Icon name="calendar_today" className="text-4xl opacity-40" />
+                    <p className="text-sm">No appointments scheduled for today.</p>
+                  </div>
                 )}
               </div>
             </div>
