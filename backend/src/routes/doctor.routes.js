@@ -8,11 +8,11 @@ const router = Router();
 router.use(authenticate);
 
 // GET /api/doctors?search=&specialty=
-router.get('/', requireRole('PATIENT'), doctorController.getDoctors);
+router.get('/', requireRole('PATIENT', 'RECEPTIONIST'), doctorController.getDoctors);
 
 // GET /api/doctors/:id/availability
 // Must be registered BEFORE /:id so Express does not treat "availability" as an ID
-router.get('/:id/availability', requireRole('PATIENT'), doctorController.getAvailability);
+router.get('/:id/availability', requireRole('PATIENT', 'RECEPTIONIST'), doctorController.getAvailability);
 
 // GET /api/doctors/:id/reviews — any authenticated user (PATIENT or DOCTOR)
 router.get('/:id/reviews', doctorController.getReviews);
@@ -21,6 +21,6 @@ router.get('/:id/reviews', doctorController.getReviews);
 router.post('/:id/reviews', requireRole('PATIENT'), doctorController.submitReview);
 
 // GET /api/doctors/:id
-router.get('/:id', requireRole('PATIENT'), doctorController.getDoctorById);
+router.get('/:id', requireRole('PATIENT', 'RECEPTIONIST'), doctorController.getDoctorById);
 
 export default router;

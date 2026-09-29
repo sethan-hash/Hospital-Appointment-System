@@ -48,7 +48,7 @@ const JS_DAY_TO_ENUM = [
  * Appointment statuses that occupy a slot — only SCHEDULED counts.
  * COMPLETED, CANCELLED, NO_SHOW do not block a new booking.
  */
-const BLOCKING_STATUSES = ['SCHEDULED'];
+export const BLOCKING_STATUSES = ['SCHEDULED'];
 
 /**
  * Normalizes an appointments DB row into a safe client payload.
@@ -103,7 +103,7 @@ function normalizeAppointment(row) {
  * @param {string} startTime       - "HH:MM" or "H:MM AM/PM"
  * @returns {Promise<{ doctor: object, sched: object, reqStartMins: number, startTimeStr: string }>}
  */
-async function validateSlotAgainstDoctorSchedule(doctorId, appointmentDate, startTime) {
+export async function validateSlotAgainstDoctorSchedule(doctorId, appointmentDate, startTime) {
   // 1. Verify doctor exists and is active
   const [doctorRows] = await pool.query(
     `SELECT d.id, d.hospital_name, d.specialization,
