@@ -16,7 +16,7 @@ export function PersonalInfoPage() {
   const [formData, setFormData] = useState({
     dob: registrationDraft.dob || '1990-01-01',
     gender: registrationDraft.gender || 'male',
-    phone: registrationDraft.phone || '+91 98765 43210',
+    phone: registrationDraft.phone || '',
     emergencyContactName: registrationDraft.emergencyContact?.name || '',
     emergencyRelationship: registrationDraft.emergencyContact?.relationship || '',
     emergencyContactPhone: registrationDraft.emergencyContact?.phone || '',
