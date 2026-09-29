@@ -294,7 +294,7 @@ function AddDoctorModal({ isOpen, onClose, onSuccess }) {
             id="doctor-fullName"
             name="fullName"
             label="Full Name"
-            placeholder="Dr. Anjali Menon"
+            placeholder="Enter full name"
             value={formData.fullName}
             onChange={handleChange}
             error={formErrors.fullName}
@@ -306,7 +306,7 @@ function AddDoctorModal({ isOpen, onClose, onSuccess }) {
             name="email"
             type="email"
             label="Email Address"
-            placeholder="anjali.menon@apollohospitals.com"
+            placeholder="doctor@example.com"
             value={formData.email}
             onChange={handleChange}
             error={formErrors.email}
@@ -317,7 +317,7 @@ function AddDoctorModal({ isOpen, onClose, onSuccess }) {
             id="doctor-phone"
             name="phone"
             label="Phone Number"
-            placeholder="+91 98450 11223"
+            placeholder="Enter 10-digit mobile number"
             value={formData.phone}
             onChange={handleChange}
             error={formErrors.phone}
@@ -351,7 +351,7 @@ function AddDoctorModal({ isOpen, onClose, onSuccess }) {
             id="doctor-department"
             name="department"
             label="Department"
-            placeholder="e.g. Cardiology"
+            placeholder="Enter department"
             value={formData.department}
             onChange={handleChange}
             error={formErrors.department}
