@@ -5,6 +5,11 @@ import {
   validateSlotAgainstDoctorSchedule,
 } from './appointment.service.js';
 
+// Operational payment statuses permitted for front-desk collection
+const RECEPTIONIST_ALLOWED_PAYMENT_STATUSES = ['PAID', 'PENDING'];
+// All payment methods available at front desk
+const ALLOWED_PAYMENT_METHODS = ['UPI', 'CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'NET_BANKING', 'INSURANCE'];
+
 /**
  * Normalizes appointment database rows for receptionist payloads.
  * Excludes sensitive user fields (password_hash).
@@ -50,6 +55,17 @@ function normalizeReceptionistAppointment(row) {
     reason: row.reason_for_visit || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    invoice: row.invoice_id
+      ? {
+          id: row.invoice_id,
+          invoiceNumber: row.invoice_number,
+          totalAmount: parseFloat(row.invoice_total_amount),
+          paymentStatus: row.invoice_payment_status,
+          paymentMethod: row.invoice_payment_method,
+          issueDate: row.invoice_issue_date,
+          paidAt: row.invoice_paid_at,
+        }
+      : null,
   };
 }
 
@@ -108,12 +124,20 @@ export async function listAppointments({ date = '', doctorId = '', status = '' }
        du.full_name AS doctor_name,
        d.specialization AS doctor_specialization,
        d.department AS doctor_department,
-       d.hospital_name AS hospital_name
+       d.hospital_name AS hospital_name,
+       i.id AS invoice_id,
+       i.invoice_number,
+       i.total_amount AS invoice_total_amount,
+       i.payment_status AS invoice_payment_status,
+       i.payment_method AS invoice_payment_method,
+       DATE_FORMAT(i.issue_date, '%Y-%m-%d') AS invoice_issue_date,
+       i.paid_at AS invoice_paid_at
      FROM appointments a
      INNER JOIN patients p ON p.id = a.patient_id
      INNER JOIN users pu ON pu.id = p.user_id
      INNER JOIN doctors d ON d.id = a.doctor_id
      INNER JOIN users du ON du.id = d.user_id
+     LEFT JOIN invoices i ON i.appointment_id = a.id
      ${whereClause}
      ORDER BY a.appointment_date ASC, a.appointment_time ASC;`,
     params
@@ -725,4 +749,124 @@ export async function updateAppointmentStatus({ appointmentId, newStatus }) {
   );
 
   return normalizeReceptionistAppointment(updatedRows[0]);
+}
+
+/**
+ * Updates an invoice's payment status and/or payment method.
+ * Restricted to front-desk operational statuses: PAID and PENDING only.
+ * Admin-only transitions (CANCELLED, REFUNDED, PARTIALLY_PAID) are forbidden.
+ * Never returns hospital-wide financial summary or revenue metrics.
+ *
+ * @param {number} invoiceId
+ * @param {object} updates
+ * @param {string} updates.paymentStatus - 'PAID' | 'PENDING'
+ * @param {string|null} [updates.paymentMethod] - payment method or null
+ * @returns {Promise<object>} Updated invoice record (operational fields only)
+ */
+export async function updateInvoicePayment(invoiceId, { paymentStatus, paymentMethod }) {
+  if (!invoiceId || !Number.isInteger(invoiceId) || invoiceId <= 0) {
+    const err = new Error('Invalid invoice ID.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (!paymentStatus || typeof paymentStatus !== 'string') {
+    const err = new Error('A valid paymentStatus is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const normStatus = paymentStatus.trim().toUpperCase();
+  if (!RECEPTIONIST_ALLOWED_PAYMENT_STATUSES.includes(normStatus)) {
+    const err = new Error(
+      `Invalid paymentStatus for front-desk update. Allowed: ${RECEPTIONIST_ALLOWED_PAYMENT_STATUSES.join(', ')}.`
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
+  let normMethod;
+  if (paymentMethod !== undefined) {
+    if (paymentMethod === null || paymentMethod === '') {
+      normMethod = null;
+    } else {
+      const parsed = String(paymentMethod).trim().toUpperCase();
+      if (!ALLOWED_PAYMENT_METHODS.includes(parsed)) {
+        const err = new Error(
+          `Invalid paymentMethod. Allowed: ${ALLOWED_PAYMENT_METHODS.join(', ')}.`
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+      normMethod = parsed;
+    }
+  }
+
+  const [existing] = await pool.query(
+    'SELECT id, invoice_number, payment_status, payment_method, total_amount, paid_at FROM invoices WHERE id = ? LIMIT 1;',
+    [invoiceId]
+  );
+
+  if (existing.length === 0) {
+    const err = new Error('Invoice not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const current = existing[0];
+  const setClauses = ['payment_status = ?'];
+  const updateParams = [normStatus];
+
+  if (normStatus === 'PAID') {
+    if (!current.paid_at) {
+      setClauses.push('paid_at = CURRENT_TIMESTAMP');
+    }
+  } else if (normStatus === 'PENDING') {
+    setClauses.push('paid_at = NULL');
+  }
+
+  if (normMethod !== undefined) {
+    setClauses.push('payment_method = ?');
+    updateParams.push(normMethod);
+  }
+
+  updateParams.push(invoiceId);
+
+  await pool.query(
+    `UPDATE invoices SET ${setClauses.join(', ')} WHERE id = ?;`,
+    updateParams
+  );
+
+  // Return only operational invoice fields — never expose hospital-wide revenue summary
+  const [updatedRows] = await pool.query(
+    `SELECT
+       i.id,
+       i.invoice_number,
+       i.appointment_id,
+       i.total_amount,
+       i.currency,
+       i.payment_status,
+       i.payment_method,
+       DATE_FORMAT(i.issue_date, '%Y-%m-%d') AS issue_date,
+       i.paid_at,
+       i.updated_at
+     FROM invoices i
+     WHERE i.id = ?
+     LIMIT 1;`,
+    [invoiceId]
+  );
+
+  const row = updatedRows[0];
+  return {
+    id: row.id,
+    invoiceNumber: row.invoice_number,
+    appointmentId: row.appointment_id,
+    totalAmount: parseFloat(row.total_amount),
+    currency: row.currency,
+    paymentStatus: row.payment_status,
+    paymentMethod: row.payment_method,
+    issueDate: row.issue_date,
+    paidAt: row.paid_at,
+    updatedAt: row.updated_at,
+  };
 }

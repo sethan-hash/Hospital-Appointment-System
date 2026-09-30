@@ -206,3 +206,65 @@ export function validateAppointmentIdParam(req, res, next) {
   }
   next();
 }
+
+// ============================================================================
+// Invoice payment validators (Phase 7D-3)
+// ============================================================================
+
+const RECEPTIONIST_ALLOWED_PAYMENT_STATUSES = ['PAID', 'PENDING'];
+const ALLOWED_PAYMENT_METHODS = ['UPI', 'CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'NET_BANKING', 'INSURANCE'];
+
+/**
+ * Middleware: validates invoice :id param is a positive integer.
+ */
+export function validateInvoiceIdParam(req, res, next) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invoice ID must be a positive integer.',
+      errors: [{ field: 'id', message: 'Invoice ID must be a positive integer.' }],
+    });
+  }
+  next();
+}
+
+/**
+ * Middleware: validates payment update body for receptionist front-desk collection.
+ * Only PAID and PENDING are permitted — CANCELLED/REFUNDED/PARTIALLY_PAID require Admin.
+ */
+export function validateReceptionistPaymentUpdate(req, res, next) {
+  const { paymentStatus, paymentMethod } = req.body;
+
+  if (!paymentStatus || typeof paymentStatus !== 'string') {
+    return res.status(400).json({
+      success: false,
+      message: 'paymentStatus is required.',
+      errors: [{ field: 'paymentStatus', message: 'paymentStatus is required.' }],
+    });
+  }
+
+  const normStatus = paymentStatus.trim().toUpperCase();
+  if (!RECEPTIONIST_ALLOWED_PAYMENT_STATUSES.includes(normStatus)) {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid paymentStatus for front-desk update. Allowed: ${RECEPTIONIST_ALLOWED_PAYMENT_STATUSES.join(', ')}.`,
+      errors: [{ field: 'paymentStatus', message: `Allowed: ${RECEPTIONIST_ALLOWED_PAYMENT_STATUSES.join(', ')}.` }],
+    });
+  }
+
+  if (paymentMethod !== undefined && paymentMethod !== null && paymentMethod !== '') {
+    const normMethod = String(paymentMethod).trim().toUpperCase();
+    if (!ALLOWED_PAYMENT_METHODS.includes(normMethod)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid paymentMethod. Allowed: ${ALLOWED_PAYMENT_METHODS.join(', ')}.`,
+        errors: [{ field: 'paymentMethod', message: `Allowed: ${ALLOWED_PAYMENT_METHODS.join(', ')}.` }],
+      });
+    }
+    req.body.paymentMethod = normMethod;
+  }
+
+  req.body.paymentStatus = normStatus;
+  next();
+}

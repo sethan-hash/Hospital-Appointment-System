@@ -11,6 +11,7 @@ import { WalkInModal } from '../../components/receptionist/WalkInModal';
 import { BookAppointmentModal } from '../../components/receptionist/BookAppointmentModal';
 import { RescheduleModal } from '../../components/receptionist/RescheduleModal';
 import { CancelModal } from '../../components/receptionist/CancelModal';
+import { PaymentCollectionModal } from '../../components/receptionist/PaymentCollectionModal';
 
 export function ReceptionistDashboardPage() {
   const { currentUser, logout } = useAuth();
@@ -47,6 +48,11 @@ export function ReceptionistDashboardPage() {
 
   const [rescheduleTarget, setRescheduleTarget] = useState(null);
   const [cancelTarget, setCancelTarget] = useState(null);
+
+  // Payment collection modal state
+  const [paymentTarget, setPaymentTarget] = useState(null);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentModalLoading, setPaymentModalLoading] = useState(false);
 
   const showNotification = (message, type = 'success') => {
     setNotification({ message, type });
@@ -168,6 +174,30 @@ export function ReceptionistDashboardPage() {
   const handleBookForPatient = (patient) => {
     setBookingPatient(patient);
     setIsBookModalOpen(true);
+  };
+
+  // Open payment collection modal
+  const handleCollectPayment = (appointment) => {
+    setPaymentTarget(appointment);
+    setIsPaymentModalOpen(true);
+  };
+
+  // Confirm payment collection
+  const handlePaymentConfirm = async ({ invoiceId, paymentStatus, paymentMethod }) => {
+    setPaymentModalLoading(true);
+    try {
+      await receptionistService.updatePayment(invoiceId, { paymentStatus, paymentMethod });
+      showNotification(
+        `Payment ${paymentStatus === 'PAID' ? 'collected' : 'reset to pending'} successfully.`
+      );
+      setIsPaymentModalOpen(false);
+      setPaymentTarget(null);
+      loadAppointments();
+    } catch (err) {
+      showNotification(err.message || 'Failed to update payment.', 'error');
+    } finally {
+      setPaymentModalLoading(false);
+    }
   };
 
   return (
@@ -320,6 +350,7 @@ export function ReceptionistDashboardPage() {
             onReschedule={(apt) => setRescheduleTarget(apt)}
             onCancel={(apt) => setCancelTarget(apt)}
             onUpdateStatus={handleUpdateStatus}
+            onCollectPayment={handleCollectPayment}
           />
         )}
 
@@ -358,6 +389,17 @@ export function ReceptionistDashboardPage() {
         appointment={cancelTarget}
         onClose={() => setCancelTarget(null)}
         onSuccess={handleCancelSuccess}
+      />
+
+      <PaymentCollectionModal
+        isOpen={isPaymentModalOpen}
+        appointment={paymentTarget}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setPaymentTarget(null);
+        }}
+        onConfirm={handlePaymentConfirm}
+        loading={paymentModalLoading}
       />
     </div>
   );

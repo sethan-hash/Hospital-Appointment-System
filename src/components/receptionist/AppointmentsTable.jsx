@@ -19,6 +19,7 @@ export function AppointmentsTable({
   onReschedule,
   onCancel,
   onUpdateStatus,
+  onCollectPayment,
 }) {
   const getStatusBadge = (status) => {
     switch (status) {
@@ -53,6 +54,33 @@ export function AppointmentsTable({
         <Icon name="local_hospital" className="text-[14px]" />
         In-Person
       </span>
+    );
+  };
+
+  const getPaymentBadge = (invoice) => {
+    if (!invoice) return <span className="text-xs text-on-surface-variant/50 italic">No invoice</span>;
+    const isPaid = invoice.paymentStatus === 'PAID';
+    return (
+      <div className="flex flex-col gap-1">
+        <span
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+            isPaid
+              ? 'bg-[#e8f5e9] text-[#2e7d32] border border-[#a5d6a7]'
+              : 'bg-amber-50 text-amber-800 border border-amber-200'
+          }`}
+        >
+          <Icon name={isPaid ? 'check_circle' : 'pending_actions'} className="text-[13px]" />
+          {invoice.paymentStatus}
+        </span>
+        <span className="text-xs font-semibold text-on-surface">
+          ₹{Number(invoice.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 0 })}
+        </span>
+        {invoice.paymentMethod && (
+          <span className="text-[11px] text-on-surface-variant">
+            {invoice.paymentMethod.replace(/_/g, ' ')}
+          </span>
+        )}
+      </div>
     );
   };
 
@@ -145,6 +173,7 @@ export function AppointmentsTable({
                   <th className="py-3 px-4">Doctor</th>
                   <th className="py-3 px-4">Type</th>
                   <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Payment</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -198,6 +227,11 @@ export function AppointmentsTable({
                         {getStatusBadge(apt.status)}
                       </td>
 
+                      {/* Payment / Invoice */}
+                      <td className="py-3.5 px-4">
+                        {getPaymentBadge(apt.invoice)}
+                      </td>
+
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
@@ -237,7 +271,22 @@ export function AppointmentsTable({
                             </>
                           )}
 
-                          {!isScheduled && (
+                          {/* Collect Payment button — shown for any appointment with a PENDING invoice */}
+                          {apt.invoice && apt.invoice.paymentStatus === 'PENDING' && onCollectPayment && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onCollectPayment(apt)}
+                              iconLeading="payments"
+                              title="Collect Payment"
+                              id={`collect-payment-${apt.id}`}
+                              className="text-xs py-1 px-2.5 text-primary border-primary/30 hover:bg-primary/5"
+                            >
+                              Collect
+                            </Button>
+                          )}
+
+                          {!isScheduled && !(apt.invoice && apt.invoice.paymentStatus === 'PENDING' && onCollectPayment) && (
                             <span className="text-xs text-on-surface-variant/70 italic px-2">
                               No actions
                             </span>
@@ -286,6 +335,42 @@ export function AppointmentsTable({
                     <strong className="text-on-surface font-medium">{apt.doctorName}</strong>
                     <span> ({apt.doctorDepartment || apt.doctorSpecialization})</span>
                   </div>
+
+                  {/* Invoice / Payment info on mobile */}
+                  {apt.invoice && (
+                    <div className="flex items-center justify-between border-t border-outline-variant/10 pt-2">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            apt.invoice.paymentStatus === 'PAID'
+                              ? 'bg-[#e8f5e9] text-[#2e7d32] border border-[#a5d6a7]'
+                              : 'bg-amber-50 text-amber-800 border border-amber-200'
+                          }`}
+                        >
+                          <Icon
+                            name={apt.invoice.paymentStatus === 'PAID' ? 'check_circle' : 'pending_actions'}
+                            className="text-[13px]"
+                          />
+                          {apt.invoice.paymentStatus}
+                        </span>
+                        <span className="text-xs font-semibold text-on-surface">
+                          ₹{Number(apt.invoice.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 0 })}
+                        </span>
+                      </div>
+                      {apt.invoice.paymentStatus === 'PENDING' && onCollectPayment && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onCollectPayment(apt)}
+                          iconLeading="payments"
+                          id={`collect-payment-mobile-${apt.id}`}
+                          className="text-xs py-1 px-2 text-primary border-primary/30"
+                        >
+                          Collect
+                        </Button>
+                      )}
+                    </div>
+                  )}
 
                   {isScheduled && (
                     <div className="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant/20">

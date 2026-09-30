@@ -7,6 +7,8 @@ import {
   validateReceptionistReschedule,
   validateReceptionistStatusUpdate,
   validateAppointmentIdParam,
+  validateInvoiceIdParam,
+  validateReceptionistPaymentUpdate,
 } from '../validators/receptionist.validator.js';
 
 const router = Router();
@@ -47,6 +49,15 @@ router.patch(
   validateAppointmentIdParam,
   validateReceptionistStatusUpdate,
   receptionistController.patchAppointmentStatus
+);
+
+// Front-desk invoice payment collection
+// PATCH /api/receptionist/invoices/:id/payment
+router.patch(
+  '/invoices/:id/payment',
+  validateInvoiceIdParam,
+  validateReceptionistPaymentUpdate,
+  receptionistController.patchInvoicePayment
 );
 
 export default router;

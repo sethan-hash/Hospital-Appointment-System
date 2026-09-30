@@ -204,3 +204,34 @@ export async function patchAppointmentStatus(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * PATCH /api/receptionist/invoices/:id/payment
+ * Collects or updates payment for an invoice at the front desk.
+ * Only PAID and PENDING statuses permitted — admin-only transitions are blocked.
+ */
+export async function patchInvoicePayment(req, res, next) {
+  try {
+    const invoiceId = Number(req.params.id);
+    const { paymentStatus, paymentMethod } = req.body;
+
+    const invoice = await receptionistService.updateInvoicePayment(invoiceId, {
+      paymentStatus,
+      paymentMethod,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Invoice ${invoice.invoiceNumber} payment status updated to ${invoice.paymentStatus}.`,
+      data: { invoice },
+    });
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
+    next(err);
+  }
+}

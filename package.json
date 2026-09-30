@@ -26,7 +26,9 @@
     "test:admin-dashboard": "node backend/src/scripts/testAdminDashboard.js",
     "test:admin-users": "node backend/src/scripts/testAdminUserManagement.js",
     "test:admin-create-doctor": "node backend/src/scripts/testAdminCreateDoctor.js",
-    "test:admin-billing-resources": "node backend/src/scripts/testAdminBillingResources.js"
+    "test:admin-billing-resources": "node backend/src/scripts/testAdminBillingResources.js",
+    "test:receptionist": "node backend/src/scripts/testReceptionistPortal.js",
+    "test:receptionist-billing": "node backend/src/scripts/testReceptionistBilling.js"
   },
   "dependencies": {
     "react": "^19.2.8",

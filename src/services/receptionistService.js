@@ -183,4 +183,30 @@ export const receptionistService = {
     const payload = await res.json();
     return payload.data?.schedule || [];
   },
+
+  /**
+   * Updates payment status and method for an invoice at the front desk.
+   * Only PAID and PENDING are valid statuses — admin-only transitions are server-blocked.
+   * Maps to PATCH /api/receptionist/invoices/:id/payment
+   *
+   * @param {number} invoiceId
+   * @param {object} params
+   * @param {string} params.paymentStatus - 'PAID' | 'PENDING'
+   * @param {string|null} [params.paymentMethod]
+   * @returns {Promise<object>} Updated invoice record
+   */
+  async updatePayment(invoiceId, { paymentStatus, paymentMethod }) {
+    const res = await fetch(`${API_BASE_URL}/receptionist/invoices/${invoiceId}/payment`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({ paymentStatus, paymentMethod }),
+    });
+
+    if (!res.ok) {
+      throw new Error(await parseError(res, 'Failed to update invoice payment.'));
+    }
+
+    const payload = await res.json();
+    return payload.data?.invoice;
+  },
 };
