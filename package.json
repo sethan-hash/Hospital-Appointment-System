@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "deploy:cf": "wrangler deploy",
     "test:auth": "node backend/src/scripts/testAuth.js",
     "test:profile": "node backend/src/scripts/testPatientProfile.js",
     "test:doctors": "node backend/src/scripts/testDoctorSearch.js",
