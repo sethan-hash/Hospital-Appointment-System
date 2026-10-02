@@ -65,7 +65,7 @@ export function LoginPage() {
               MedLink Care
             </h1>
             <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
-              Welcome back, Patient
+              Welcome back
             </p>
           </div>
         </div>
