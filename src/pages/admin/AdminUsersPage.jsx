@@ -126,6 +126,82 @@ function StatusConfirmModal({ isOpen, onClose, onConfirm, user, newStatus, loadi
 }
 
 // ---------------------------------------------------------------------------
+// Confirm Remove Doctor Modal
+// ---------------------------------------------------------------------------
+function RemoveDoctorConfirmModal({ isOpen, onClose, onConfirm, user, loading }) {
+  if (!user) return null;
+
+  const department = user.profile?.department || 'General Medicine';
+  const specialization = user.profile?.specialization || 'Consultant Specialist';
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Remove Doctor" maxWidth="max-w-md">
+      <div className="flex flex-col gap-4">
+        {/* Doctor Identity Header */}
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-container border border-outline-variant/20">
+          <div
+            className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${ROLE_COLOR.DOCTOR || 'bg-secondary/10 text-secondary'}`}
+          >
+            {userInitials(user.fullName)}
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-sm text-on-surface truncate">{user.fullName}</p>
+            <p className="text-xs text-on-surface-variant truncate">{user.email}</p>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-secondary/10 text-secondary">
+                {specialization}
+              </span>
+              <span className="text-xs text-on-surface-variant">•</span>
+              <span className="text-xs text-on-surface-variant truncate">{department}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Warning / Consequences */}
+        <div className="p-3.5 rounded-xl bg-error/10 border border-error/20 flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-error font-semibold text-xs uppercase tracking-wider">
+            <Icon name="warning" className="text-base shrink-0" />
+            <span>Removal Impact & Consequences</span>
+          </div>
+          <p className="text-xs text-on-surface-variant leading-relaxed">
+            Removing this doctor from MedLink Care will immediately prevent new appointment bookings.
+          </p>
+          <ul className="text-xs text-on-surface-variant list-disc pl-4 space-y-1">
+            <li>
+              <strong>Zero-History Doctor:</strong> If this doctor has no appointments or medical records, their profile and credentials will be <strong>permanently deleted</strong>.
+            </li>
+            <li>
+              <strong>Doctor with Clinical History:</strong> To preserve compliance and medical audit history, past consultations, medical records, and invoices are <strong>preserved</strong>, while upcoming scheduled appointments will be automatically cancelled and the account archived.
+            </li>
+          </ul>
+        </div>
+
+        <p className="text-xs text-on-surface-variant font-medium">
+          Are you sure you want to proceed with removing <span className="text-on-surface font-semibold">{user.fullName}</span>?
+        </p>
+
+        <div className="flex gap-3 justify-end pt-1">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            loading={loading}
+            onClick={onConfirm}
+            className="bg-error text-on-error hover:bg-error/90 flex items-center gap-1.5"
+            id="admin-confirm-remove-doctor-btn"
+          >
+            <Icon name="person_remove" className="text-base" />
+            <span>Remove Doctor</span>
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Add Doctor Modal
 // ---------------------------------------------------------------------------
 const COMMON_SPECIALTIES = [
@@ -485,6 +561,13 @@ export function AdminUsersPage() {
   const [statusError, setStatusError] = useState(null);
   const [statusSuccess, setStatusSuccess] = useState(null);
 
+  // Remove doctor modal state
+  const [removeDoctorModal, setRemoveDoctorModal] = useState({
+    open: false,
+    user: null,
+  });
+  const [removeDoctorLoading, setRemoveDoctorLoading] = useState(false);
+
   // Debounce search input
   const debounceTimer = useRef(null);
 
@@ -579,6 +662,44 @@ export function AdminUsersPage() {
       setStatusError(err.message || 'Failed to update status.');
     } finally {
       setStatusLoading(false);
+    }
+  };
+
+  const openRemoveDoctorModal = (user) => {
+    setStatusError(null);
+    setStatusSuccess(null);
+    setRemoveDoctorModal({ open: true, user });
+  };
+
+  const closeRemoveDoctorModal = () => {
+    if (!removeDoctorLoading) {
+      setRemoveDoctorModal({ open: false, user: null });
+    }
+  };
+
+  const handleRemoveDoctorConfirm = async () => {
+    const { user } = removeDoctorModal;
+    if (!user) return;
+    setRemoveDoctorLoading(true);
+    setStatusError(null);
+    setStatusSuccess(null);
+    try {
+      const result = await adminService.removeDoctor(user.id);
+      setStatusSuccess(result.message || `Doctor ${user.fullName} removed successfully.`);
+      if (result.action === 'HARD_DELETE') {
+        setUsers((prev) => prev.filter((u) => u.id !== user.id));
+        setTotal((prev) => Math.max(0, prev - 1));
+      } else {
+        // Archived: set status to INACTIVE
+        setUsers((prev) =>
+          prev.map((u) => (u.id === user.id ? { ...u, status: 'INACTIVE' } : u))
+        );
+      }
+      setRemoveDoctorModal({ open: false, user: null });
+    } catch (err) {
+      setStatusError(err.message || 'Failed to remove doctor.');
+    } finally {
+      setRemoveDoctorLoading(false);
     }
   };
 
@@ -843,29 +964,67 @@ export function AdminUsersPage() {
                       <span className="text-xs text-on-surface-variant/70 italic px-2">
                         Current Account
                       </span>
-                    ) : user.status === 'ACTIVE' ? (
+                    ) : user.role === 'ADMIN' ? (
+                      user.status === 'ACTIVE' ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openStatusModal(user, 'INACTIVE')}
+                          className="text-error border-error/30 hover:bg-error/5 text-xs"
+                          title={`Deactivate ${user.fullName}`}
+                        >
+                          <Icon name="person_off" className="text-base mr-1" />
+                          Deactivate
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openStatusModal(user, 'ACTIVE')}
+                          className="text-[#2e7d32] border-[#a5d6a7] hover:bg-[#e8f5e9] text-xs"
+                          title={`Activate ${user.fullName}`}
+                        >
+                          <Icon name="person_check" className="text-base mr-1" />
+                          Activate
+                        </Button>
+                      )
+                    ) : user.role === 'RECEPTIONIST' ? (
+                      user.status === 'ACTIVE' ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openStatusModal(user, 'INACTIVE')}
+                          className="text-error border-error/30 hover:bg-error/5 text-xs"
+                          title={`Deactivate ${user.fullName}`}
+                        >
+                          <Icon name="person_off" className="text-base mr-1" />
+                          Deactivate
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openStatusModal(user, 'ACTIVE')}
+                          className="text-[#2e7d32] border-[#a5d6a7] hover:bg-[#e8f5e9] text-xs"
+                          title={`Activate ${user.fullName}`}
+                        >
+                          <Icon name="person_check" className="text-base mr-1" />
+                          Activate
+                        </Button>
+                      )
+                    ) : user.role === 'DOCTOR' ? (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => openStatusModal(user, 'INACTIVE')}
+                        onClick={() => openRemoveDoctorModal(user)}
                         className="text-error border-error/30 hover:bg-error/5 text-xs"
-                        title={`Deactivate ${user.fullName}`}
+                        title={`Remove ${user.fullName}`}
+                        id={`admin-remove-doctor-${user.id}`}
                       >
-                        <Icon name="person_off" className="text-base mr-1" />
-                        Deactivate
+                        <Icon name="person_remove" className="text-base mr-1" />
+                        Remove Doctor
                       </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openStatusModal(user, 'ACTIVE')}
-                        className="text-[#2e7d32] border-[#a5d6a7] hover:bg-[#e8f5e9] text-xs"
-                        title={`Activate ${user.fullName}`}
-                      >
-                        <Icon name="person_check" className="text-base mr-1" />
-                        Activate
-                      </Button>
-                    )}
+                    ) : null /* PATIENT rows: no action completely */}
                   </div>
                 </div>
               ))}
@@ -892,6 +1051,17 @@ export function AdminUsersPage() {
         user={confirmModal.user}
         newStatus={confirmModal.newStatus}
         loading={statusLoading}
+      />
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Remove Doctor Confirmation Modal */}
+      {/* ------------------------------------------------------------------ */}
+      <RemoveDoctorConfirmModal
+        isOpen={removeDoctorModal.open}
+        onClose={closeRemoveDoctorModal}
+        onConfirm={handleRemoveDoctorConfirm}
+        user={removeDoctorModal.user}
+        loading={removeDoctorLoading}
       />
 
       {/* ------------------------------------------------------------------ */}

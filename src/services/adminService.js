@@ -125,6 +125,29 @@ export const adminService = {
   },
 
   /**
+   * Removes or archives a doctor account depending on clinical history.
+   * Maps to DELETE /api/admin/doctors/:id
+   *
+   * @param {number} doctorId - Doctor user ID or profile ID
+   * @returns {Promise<object>}
+   */
+  async removeDoctor(doctorId) {
+    const response = await fetch(`${API_BASE_URL}/admin/doctors/${doctorId}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Failed to remove doctor (${response.status})`);
+    }
+
+    const payload = await response.json();
+    return payload.data;
+  },
+
+
+  /**
    * Lists hospital invoices with optional search, status, paymentMethod, and date filters.
    * Maps to GET /api/admin/invoices
    *

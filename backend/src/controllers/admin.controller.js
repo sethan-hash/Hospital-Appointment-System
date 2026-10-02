@@ -269,3 +269,34 @@ export async function createDoctor(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * DELETE /api/admin/doctors/:id
+ * Removes or archives a doctor account using dual-path removal.
+ * - Zero history -> permanent hard delete
+ * - Existing history -> archive, unlist, cancel upcoming scheduled appointments
+ */
+export async function removeDoctor(req, res, next) {
+  try {
+    const adminUserId = req.user.id;
+    const targetDoctorId = Number(req.params.id);
+
+    if (!targetDoctorId || !Number.isInteger(targetDoctorId) || targetDoctorId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid doctor ID in path parameter.',
+      });
+    }
+
+    const result = await adminService.removeDoctor(adminUserId, targetDoctorId);
+
+    res.status(200).json({
+      success: true,
+      message: result.message || 'Doctor removed successfully.',
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+

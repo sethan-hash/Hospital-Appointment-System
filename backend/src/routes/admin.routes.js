@@ -17,6 +17,10 @@ router.get('/users', adminController.getUsers);
 // POST /api/admin/doctors
 router.post('/doctors', validateCreateDoctor, adminController.createDoctor);
 
+// DELETE /api/admin/doctors/:id
+router.delete('/doctors/:id', adminController.removeDoctor);
+
+
 // PATCH /api/admin/users/:id/status
 router.patch('/users/:id/status', adminController.patchUserStatus);
 

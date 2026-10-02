@@ -483,6 +483,171 @@ export async function createDoctor(adminUserId, doctorData) {
   }
 }
 
+/**
+ * Removes or archives a doctor account using dual-path removal.
+ * - Zero appointments + zero medical records -> Hard delete from database.
+ * - History exists -> Archive: sets user to INACTIVE, doctor to unavailable, schedules inactive,
+ *   cancels future scheduled appointments, and preserves all historical records.
+ *
+ * Enforces admin lockout/self-protection and role verification.
+ *
+ * @param {number} adminUserId - Authenticated admin ID from JWT
+ * @param {number} targetId - Doctor user ID or doctor profile ID
+ * @returns {Promise<object>} Result payload describing whether hard delete or archive took place
+ */
+export async function removeDoctor(adminUserId, targetId) {
+  // 1. Verify admin identity and ACTIVE status
+  const [adminRows] = await pool.query(
+    "SELECT id, role, status FROM users WHERE id = ? AND role = 'ADMIN' LIMIT 1;",
+    [adminUserId]
+  );
+
+  if (adminRows.length === 0 || adminRows[0].status !== 'ACTIVE') {
+    const error = new Error('Admin profile not found or account is inactive.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  // 2. Prevent removing the currently logged-in admin directly by ID check
+  if (Number(targetId) === Number(adminUserId)) {
+    const error = new Error('You cannot remove your own administrator account.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  // 3. Find target user and doctor record
+  const [userDoctorRows] = await pool.query(
+    `SELECT 
+       u.id AS user_id, 
+       u.role, 
+       u.full_name, 
+       u.email, 
+       u.status,
+       d.id AS doctor_id,
+       d.specialization,
+       d.department,
+       d.hospital_name
+     FROM users u
+     LEFT JOIN doctors d ON d.user_id = u.id
+     WHERE u.id = ? OR d.id = ?
+     ORDER BY (CASE WHEN u.id = ? THEN 0 ELSE 1 END)
+     LIMIT 1;`,
+    [targetId, targetId, targetId]
+  );
+
+  if (userDoctorRows.length === 0) {
+    const error = new Error('Doctor not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const target = userDoctorRows[0];
+
+  // Self or admin protection
+  if (Number(target.user_id) === Number(adminUserId)) {
+    const error = new Error('You cannot remove your own administrator account.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  if (target.role === 'ADMIN') {
+    const error = new Error('Administrator accounts cannot be removed using doctor removal.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (target.role !== 'DOCTOR' || !target.doctor_id) {
+    const error = new Error('Doctor not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const doctorId = target.doctor_id;
+  const userId = target.user_id;
+  const doctorName = target.full_name;
+
+  // 4. Inspect appointment and clinical history
+  const [aptCountRows] = await pool.query(
+    'SELECT COUNT(*) AS count FROM appointments WHERE doctor_id = ?;',
+    [doctorId]
+  );
+  const [recCountRows] = await pool.query(
+    'SELECT COUNT(*) AS count FROM medical_records WHERE doctor_id = ?;',
+    [doctorId]
+  );
+
+  const appointmentCount = Number(aptCountRows[0]?.count || 0);
+  const recordCount = Number(recCountRows[0]?.count || 0);
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    if (appointmentCount === 0 && recordCount === 0) {
+      // PATH 1: Zero-history clean hard delete
+      await connection.query('DELETE FROM reviews WHERE doctor_id = ?;', [doctorId]);
+      await connection.query('DELETE FROM doctor_schedules WHERE doctor_id = ?;', [doctorId]);
+      await connection.query('DELETE FROM doctors WHERE id = ?;', [doctorId]);
+      await connection.query('DELETE FROM users WHERE id = ?;', [userId]);
+
+      await connection.commit();
+
+      return {
+        action: 'HARD_DELETE',
+        doctorId,
+        userId,
+        doctorName,
+        deleted: true,
+        message: `Doctor ${doctorName} has no clinical history and was permanently removed.`,
+      };
+    } else {
+      // PATH 2: Clinical history exists -> Safe archive
+      // 1. users.status = 'INACTIVE'
+      await connection.query("UPDATE users SET status = 'INACTIVE' WHERE id = ?;", [userId]);
+
+      // 2. doctors.is_available = FALSE
+      await connection.query('UPDATE doctors SET is_available = FALSE WHERE id = ?;', [doctorId]);
+
+      // 3. doctor_schedules.is_active = FALSE
+      await connection.query('UPDATE doctor_schedules SET is_active = FALSE WHERE doctor_id = ?;', [doctorId]);
+
+      // 4. Cancel future SCHEDULED appointments
+      const [cancelResult] = await connection.query(
+        `UPDATE appointments 
+         SET status = 'CANCELLED' 
+         WHERE doctor_id = ? 
+           AND status = 'SCHEDULED' 
+           AND (appointment_date > CURDATE() OR (appointment_date = CURDATE() AND appointment_time >= CURTIME()));`,
+        [doctorId]
+      );
+
+      const cancelledAppointments = cancelResult.affectedRows || 0;
+
+      await connection.commit();
+
+      return {
+        action: 'ARCHIVE',
+        doctorId,
+        userId,
+        doctorName,
+        status: 'INACTIVE',
+        isAvailable: false,
+        cancelledFutureAppointments: cancelledAppointments,
+        appointmentCount,
+        recordCount,
+        message: `Doctor ${doctorName} has clinical history (${appointmentCount} appointments, ${recordCount} medical records). Account has been unlisted/archived and future appointments cancelled. Historical records preserved.`,
+      };
+    }
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+}
+
+
 const ALLOWED_INVOICE_STATUSES = ['PENDING', 'PAID', 'PARTIALLY_PAID', 'CANCELLED', 'REFUNDED'];
 const ALLOWED_PAYMENT_METHODS = ['UPI', 'CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'NET_BANKING', 'INSURANCE'];
 const ALLOWED_RESOURCE_STATUSES = ['AVAILABLE', 'OCCUPIED', 'UNDER_MAINTENANCE', 'RESERVED'];
