@@ -13,8 +13,8 @@ export function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState('rahul.verma@example.in');
-  const [password, setPassword] = useState('Password123!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
 
