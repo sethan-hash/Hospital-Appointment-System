@@ -300,3 +300,56 @@ export async function removeDoctor(req, res, next) {
   }
 }
 
+/**
+ * POST /api/admin/administrators
+ * Creates a new Administrator user account.
+ * Accepts fullName, email, phone, password.
+ * Never returns password_hash.
+ */
+export async function createAdministrator(req, res, next) {
+  try {
+    const adminUserId = req.user.id;
+    const result = await adminService.createAdministrator(adminUserId, req.body);
+
+    res.status(201).json({
+      success: true,
+      message: 'Administrator account created successfully.',
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PATCH /api/admin/doctors/:id/restore
+ * Restores an archived/inactive doctor:
+ *   - users.status → ACTIVE
+ *   - doctors.is_available → TRUE
+ *   - doctor_schedules.is_active → TRUE (existing schedules only)
+ * Safe no-op if doctor is already ACTIVE.
+ */
+export async function restoreDoctor(req, res, next) {
+  try {
+    const adminUserId = req.user.id;
+    const targetDoctorId = Number(req.params.id);
+
+    if (!targetDoctorId || !Number.isInteger(targetDoctorId) || targetDoctorId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid doctor ID in path parameter.',
+      });
+    }
+
+    const result = await adminService.restoreDoctor(adminUserId, targetDoctorId);
+
+    res.status(200).json({
+      success: true,
+      message: result.message || 'Doctor restored successfully.',
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+

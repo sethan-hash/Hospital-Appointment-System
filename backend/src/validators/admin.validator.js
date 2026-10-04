@@ -1,9 +1,11 @@
 /**
  * Admin Request Validators
- * Validates request payloads for administrative actions such as doctor creation.
+ * Validates request payloads for administrative actions such as doctor creation
+ * and administrator creation.
  */
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const INDIAN_MOBILE_REGEX = /^[6-9]\d{9}$/;
 
 /**
  * Validates doctor creation request body.
@@ -107,6 +109,60 @@ export function validateCreateDoctor(req, res, next) {
   // 11. Bio
   if (bio && (typeof bio !== 'string' || bio.length > 2000)) {
     errors.push({ field: 'bio', message: 'Bio must not exceed 2000 characters.' });
+  }
+
+  if (errors.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors,
+    });
+  }
+
+  next();
+}
+
+/**
+ * Validates administrator creation request body.
+ * Ensures fullName, email, 10-digit Indian mobile number, and matching passwords.
+ */
+export function validateCreateAdministrator(req, res, next) {
+  const { fullName, email, phone, password, confirmPassword } = req.body;
+
+  const errors = [];
+
+  // 1. Full Name
+  if (!fullName || typeof fullName !== 'string' || fullName.trim().length < 2) {
+    errors.push({ field: 'fullName', message: 'Full name is required (minimum 2 characters).' });
+  } else if (fullName.trim().length > 100) {
+    errors.push({ field: 'fullName', message: 'Full name must not exceed 100 characters.' });
+  }
+
+  // 2. Email
+  if (!email || typeof email !== 'string' || !EMAIL_REGEX.test(email.trim())) {
+    errors.push({ field: 'email', message: 'A valid email address is required.' });
+  } else if (email.trim().length > 150) {
+    errors.push({ field: 'email', message: 'Email address must not exceed 150 characters.' });
+  }
+
+  // 3. Phone — 10-digit Indian mobile number
+  const normalizedPhone = phone ? String(phone).trim() : '';
+  if (!normalizedPhone) {
+    errors.push({ field: 'phone', message: 'Phone number is required.' });
+  } else if (!INDIAN_MOBILE_REGEX.test(normalizedPhone)) {
+    errors.push({ field: 'phone', message: 'Phone must be a valid 10-digit Indian mobile number (starting with 6–9).' });
+  }
+
+  // 4. Password
+  if (!password || typeof password !== 'string' || password.length < 6) {
+    errors.push({ field: 'password', message: 'Password is required and must be at least 6 characters.' });
+  }
+
+  // 5. Confirm Password
+  if (!confirmPassword || typeof confirmPassword !== 'string') {
+    errors.push({ field: 'confirmPassword', message: 'Please confirm your password.' });
+  } else if (password && confirmPassword !== password) {
+    errors.push({ field: 'confirmPassword', message: 'Passwords do not match.' });
   }
 
   if (errors.length > 0) {

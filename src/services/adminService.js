@@ -146,6 +146,53 @@ export const adminService = {
     return payload.data;
   },
 
+  /**
+   * Restores an archived/inactive doctor account.
+   * Maps to PATCH /api/admin/doctors/:id/restore
+   *
+   * @param {number} doctorId - Doctor user ID or doctor profile ID
+   * @returns {Promise<object>}
+   */
+  async restoreDoctor(doctorId) {
+    const response = await fetch(`${API_BASE_URL}/admin/doctors/${doctorId}/restore`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Failed to restore doctor (${response.status})`);
+    }
+
+    const payload = await response.json();
+    return payload.data;
+  },
+
+  /**
+   * Creates a new Administrator account.
+   * Maps to POST /api/admin/administrators
+   *
+   * @param {object} adminData - { fullName, email, phone, password, confirmPassword }
+   * @returns {Promise<object>}
+   */
+  async createAdministrator(adminData) {
+    const response = await fetch(`${API_BASE_URL}/admin/administrators`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(adminData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const err = new Error(errorData.message || `Failed to create administrator (${response.status})`);
+      err.errors = errorData.errors;
+      throw err;
+    }
+
+    const payload = await response.json();
+    return payload.data;
+  },
+
 
   /**
    * Lists hospital invoices with optional search, status, paymentMethod, and date filters.

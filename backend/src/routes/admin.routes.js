@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as adminController from '../controllers/admin.controller.js';
 import { authenticate, requireRole } from '../middleware/auth.middleware.js';
-import { validateCreateDoctor } from '../validators/admin.validator.js';
+import { validateCreateDoctor, validateCreateAdministrator } from '../validators/admin.validator.js';
 
 const router = Router();
 
@@ -19,6 +19,12 @@ router.post('/doctors', validateCreateDoctor, adminController.createDoctor);
 
 // DELETE /api/admin/doctors/:id
 router.delete('/doctors/:id', adminController.removeDoctor);
+
+// PATCH /api/admin/doctors/:id/restore
+router.patch('/doctors/:id/restore', adminController.restoreDoctor);
+
+// POST /api/admin/administrators
+router.post('/administrators', validateCreateAdministrator, adminController.createAdministrator);
 
 
 // PATCH /api/admin/users/:id/status

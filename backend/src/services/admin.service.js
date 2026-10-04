@@ -1219,3 +1219,225 @@ export async function updateResourceStatus(adminUserId, resourceId, { status, al
     updatedAt: row.updated_at,
   };
 }
+
+/**
+ * Creates a new Administrator user account in a transaction.
+ * - Validates uniqueness of email and phone.
+ * - Hashes password with bcryptjs.
+ * - Inserts into users with role='ADMIN', status='ACTIVE'.
+ * - Does NOT create a patient or doctor profile.
+ * - Never returns password_hash.
+ *
+ * @param {number} adminUserId - Authenticated admin ID from JWT
+ * @param {object} data - { fullName, email, phone, password }
+ * @returns {Promise<{ user: object }>}
+ */
+export async function createAdministrator(adminUserId, data) {
+  // 1. Verify acting admin identity and ACTIVE status
+  const [adminRows] = await pool.query(
+    "SELECT id, role, status FROM users WHERE id = ? AND role = 'ADMIN' LIMIT 1;",
+    [adminUserId]
+  );
+  if (adminRows.length === 0 || adminRows[0].status !== 'ACTIVE') {
+    const error = new Error('Admin profile not found or account is inactive.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const fullName = (data.fullName || '').trim();
+  const email = (data.email || '').trim().toLowerCase();
+  const phone = (data.phone || '').trim();
+  const password = data.password || '';
+
+  // 2. Duplicate email check
+  const [emailRows] = await pool.query(
+    'SELECT id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1;',
+    [email]
+  );
+  if (emailRows.length > 0) {
+    const error = new Error('An account with this email address already exists.');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  // 3. Duplicate phone check
+  const [phoneRows] = await pool.query(
+    'SELECT id FROM users WHERE phone = ? LIMIT 1;',
+    [phone]
+  );
+  if (phoneRows.length > 0) {
+    const error = new Error('An account with this phone number already exists.');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  // 4. Hash password
+  const passwordHash = await hashPassword(password);
+
+  // 5. Atomic insert
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [insertResult] = await connection.query(
+      `INSERT INTO users (role, full_name, email, phone, password_hash, status)
+       VALUES ('ADMIN', ?, ?, ?, ?, 'ACTIVE');`,
+      [fullName, email, phone, passwordHash]
+    );
+
+    const newUserId = insertResult.insertId;
+
+    await connection.commit();
+
+    return {
+      user: {
+        id: newUserId,
+        role: 'ADMIN',
+        fullName,
+        email,
+        phone,
+        status: 'ACTIVE',
+      },
+    };
+  } catch (err) {
+    await connection.rollback();
+    if (err.code === 'ER_DUP_ENTRY') {
+      const dupError = new Error('An account with this email or phone number already exists.');
+      dupError.statusCode = 409;
+      throw dupError;
+    }
+    throw err;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Restores an archived/inactive doctor account atomically.
+ * - Sets users.status = 'ACTIVE'
+ * - Sets doctors.is_available = TRUE
+ * - Sets all existing doctor_schedules.is_active = TRUE
+ * - Does NOT recreate deleted doctors or create duplicate schedules.
+ * - Does NOT alter appointments, medical_records, invoices, reviews, vitals, or medications.
+ * - If the doctor is already ACTIVE, returns a safe no-op response.
+ *
+ * @param {number} adminUserId - Authenticated admin ID from JWT
+ * @param {number} targetId - Doctor user ID or doctor profile ID
+ * @returns {Promise<object>} Restoration result payload
+ */
+export async function restoreDoctor(adminUserId, targetId) {
+  // 1. Verify admin identity and ACTIVE status
+  const [adminRows] = await pool.query(
+    "SELECT id, role, status FROM users WHERE id = ? AND role = 'ADMIN' LIMIT 1;",
+    [adminUserId]
+  );
+  if (adminRows.length === 0 || adminRows[0].status !== 'ACTIVE') {
+    const error = new Error('Admin profile not found or account is inactive.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  // 2. Resolve doctor by user_id or doctor profile id
+  const [userDoctorRows] = await pool.query(
+    `SELECT
+       u.id AS user_id,
+       u.role,
+       u.full_name,
+       u.email,
+       u.status AS user_status,
+       d.id AS doctor_id,
+       d.specialization,
+       d.department,
+       d.hospital_name,
+       d.is_available
+     FROM users u
+     LEFT JOIN doctors d ON d.user_id = u.id
+     WHERE u.id = ? OR d.id = ?
+     ORDER BY (CASE WHEN u.id = ? THEN 0 ELSE 1 END)
+     LIMIT 1;`,
+    [targetId, targetId, targetId]
+  );
+
+  if (userDoctorRows.length === 0) {
+    const error = new Error('Doctor not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const target = userDoctorRows[0];
+
+  if (target.role !== 'DOCTOR' || !target.doctor_id) {
+    const error = new Error('Doctor not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const doctorId = target.doctor_id;
+  const userId = target.user_id;
+  const doctorName = target.full_name;
+
+  // 3. If already ACTIVE and available, return safe no-op
+  if (target.user_status === 'ACTIVE' && Boolean(target.is_available)) {
+    return {
+      action: 'ALREADY_ACTIVE',
+      doctorId,
+      userId,
+      doctorName,
+      status: 'ACTIVE',
+      isAvailable: true,
+      message: `Doctor ${doctorName} is already active and available for appointment booking.`,
+    };
+  }
+
+  // 4. Count existing schedules (do not create new ones)
+  const [scheduleRows] = await pool.query(
+    'SELECT id FROM doctor_schedules WHERE doctor_id = ?;',
+    [doctorId]
+  );
+  const existingScheduleCount = scheduleRows.length;
+
+  // 5. Atomic restoration
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Activate user account
+    await connection.query(
+      "UPDATE users SET status = 'ACTIVE' WHERE id = ?;",
+      [userId]
+    );
+
+    // Mark doctor as available
+    await connection.query(
+      'UPDATE doctors SET is_available = TRUE WHERE id = ?;',
+      [doctorId]
+    );
+
+    // Reactivate all existing schedules (no new schedules created)
+    if (existingScheduleCount > 0) {
+      await connection.query(
+        'UPDATE doctor_schedules SET is_active = TRUE WHERE doctor_id = ?;',
+        [doctorId]
+      );
+    }
+
+    await connection.commit();
+
+    return {
+      action: 'RESTORED',
+      doctorId,
+      userId,
+      doctorName,
+      status: 'ACTIVE',
+      isAvailable: true,
+      reactivatedSchedules: existingScheduleCount,
+      message: `Doctor ${doctorName} has been restored. Account is now active and available for appointment booking. ${existingScheduleCount} schedule(s) reactivated.`,
+    };
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+}
+

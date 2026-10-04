@@ -30,7 +30,9 @@
     "test:admin-remove-doctor": "node backend/src/scripts/testAdminRemoveDoctor.js",
     "test:admin-billing-resources": "node backend/src/scripts/testAdminBillingResources.js",
     "test:receptionist": "node backend/src/scripts/testReceptionistPortal.js",
-    "test:receptionist-billing": "node backend/src/scripts/testReceptionistBilling.js"
+    "test:receptionist-billing": "node backend/src/scripts/testReceptionistBilling.js",
+    "test:admin-administrator-restore": "node backend/src/scripts/testAdminAdministratorAndRestore.js"
+
   },
   "dependencies": {
     "react": "^19.2.8",

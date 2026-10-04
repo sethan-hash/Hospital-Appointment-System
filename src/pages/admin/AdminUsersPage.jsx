@@ -530,6 +530,261 @@ function AddDoctorModal({ isOpen, onClose, onSuccess }) {
 }
 
 // ---------------------------------------------------------------------------
+// Add Administrator Modal
+// ---------------------------------------------------------------------------
+const INITIAL_ADMIN_FORM = {
+  fullName: '',
+  email: '',
+  phone: '',
+  password: '',
+  confirmPassword: '',
+};
+
+const INDIAN_MOBILE_RE = /^[6-9]\d{9}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function AddAdministratorModal({ isOpen, onClose, onSuccess }) {
+  const [formData, setFormData] = useState(INITIAL_ADMIN_FORM);
+  const [formErrors, setFormErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [generalError, setGeneralError] = useState(null);
+
+  const resetForm = () => {
+    setFormData(INITIAL_ADMIN_FORM);
+    setFormErrors({});
+    setGeneralError(null);
+  };
+
+  const handleClose = () => {
+    if (!submitting) {
+      resetForm();
+      onClose();
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (formErrors[name]) {
+      setFormErrors((prev) => ({ ...prev, [name]: null }));
+    }
+  };
+
+  const validate = () => {
+    const errs = {};
+    if (!formData.fullName.trim() || formData.fullName.trim().length < 2) {
+      errs.fullName = 'Full name is required (min 2 characters).';
+    }
+    if (!formData.email.trim() || !EMAIL_RE.test(formData.email.trim())) {
+      errs.email = 'A valid email address is required.';
+    }
+    const phone = formData.phone.trim();
+    if (!phone) {
+      errs.phone = 'Phone number is required.';
+    } else if (!INDIAN_MOBILE_RE.test(phone)) {
+      errs.phone = 'Phone must be a valid 10-digit Indian mobile number (starting with 6–9).';
+    }
+    if (!formData.password || formData.password.length < 6) {
+      errs.password = 'Password is required and must be at least 6 characters.';
+    }
+    if (!formData.confirmPassword) {
+      errs.confirmPassword = 'Please confirm your password.';
+    } else if (formData.confirmPassword !== formData.password) {
+      errs.confirmPassword = 'Passwords do not match.';
+    }
+    setFormErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validate()) return;
+
+    setSubmitting(true);
+    setGeneralError(null);
+
+    try {
+      const result = await adminService.createAdministrator({
+        fullName: formData.fullName.trim(),
+        email: formData.email.trim().toLowerCase(),
+        phone: formData.phone.trim(),
+        password: formData.password,
+        confirmPassword: formData.confirmPassword,
+      });
+      resetForm();
+      onSuccess(result);
+    } catch (err) {
+      setGeneralError(err.message || 'Failed to create administrator account.');
+      if (err.errors && Array.isArray(err.errors)) {
+        const errMap = {};
+        err.errors.forEach((e) => {
+          if (e.field) errMap[e.field] = e.message;
+        });
+        setFormErrors(errMap);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={handleClose} title="Add New Administrator" maxWidth="max-w-xl">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {generalError && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-error-container/20 border border-error/30 text-error text-sm">
+            <Icon name="error" className="text-lg shrink-0" />
+            <span>{generalError}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            id="admin-fullName"
+            name="fullName"
+            label="Full Name"
+            placeholder="Enter full name"
+            value={formData.fullName}
+            onChange={handleChange}
+            error={formErrors.fullName}
+            required
+          />
+
+          <Input
+            id="admin-email"
+            name="email"
+            type="email"
+            label="Email Address"
+            placeholder="admin@example.com"
+            value={formData.email}
+            onChange={handleChange}
+            error={formErrors.email}
+            required
+          />
+
+          <Input
+            id="admin-phone"
+            name="phone"
+            label="Phone Number"
+            placeholder="Enter 10-digit mobile number"
+            value={formData.phone}
+            onChange={handleChange}
+            error={formErrors.phone}
+            required
+          />
+
+          <div />{/* spacer to keep grid alignment */}
+
+          <Input
+            id="admin-password"
+            name="password"
+            type="password"
+            label="Password"
+            placeholder="Enter password"
+            value={formData.password}
+            onChange={handleChange}
+            error={formErrors.password}
+            required
+          />
+
+          <Input
+            id="admin-confirmPassword"
+            name="confirmPassword"
+            type="password"
+            label="Confirm Password"
+            placeholder="Confirm password"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            error={formErrors.confirmPassword}
+            required
+          />
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2 border-t border-outline-variant/20">
+          <Button variant="outline" size="sm" type="button" onClick={handleClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button variant="primary" size="sm" type="submit" loading={submitting} id="admin-create-admin-submit-btn">
+            <Icon name="admin_panel_settings" className="text-base mr-1" />
+            Create Administrator
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Confirm Restore Doctor Modal
+// ---------------------------------------------------------------------------
+function RestoreDoctorConfirmModal({ isOpen, onClose, onConfirm, user, loading }) {
+  if (!user) return null;
+
+  const department = user.profile?.department || 'General Medicine';
+  const specialization = user.profile?.specialization || 'Consultant Specialist';
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Restore Doctor" maxWidth="max-w-md">
+      <div className="flex flex-col gap-4">
+        {/* Doctor Identity Header */}
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-container border border-outline-variant/20">
+          <div
+            className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${ROLE_COLOR.DOCTOR}`}
+          >
+            {userInitials(user.fullName)}
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-sm text-on-surface truncate">{user.fullName}</p>
+            <p className="text-xs text-on-surface-variant truncate">{user.email}</p>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-secondary/10 text-secondary">
+                {specialization}
+              </span>
+              <span className="text-xs text-on-surface-variant">•</span>
+              <span className="text-xs text-on-surface-variant truncate">{department}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Restoration consequences */}
+        <div className="p-3.5 rounded-xl bg-[#e8f5e9]/60 border border-[#a5d6a7]/50 flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-[#2e7d32] font-semibold text-xs uppercase tracking-wider">
+            <Icon name="restore" className="text-base shrink-0" />
+            <span>Restoration Effects</span>
+          </div>
+          <ul className="text-xs text-on-surface-variant list-disc pl-4 space-y-1">
+            <li>The doctor account will be <strong>activated</strong> and able to log in again.</li>
+            <li>The doctor will be <strong>available for appointment booking</strong> by patients and receptionists.</li>
+            <li>The existing doctor schedule will be <strong>reactivated</strong> automatically.</li>
+            <li>Historical appointments, medical records, and invoices remain <strong>untouched</strong>.</li>
+          </ul>
+        </div>
+
+        <p className="text-xs text-on-surface-variant font-medium">
+          Are you sure you want to restore <span className="text-on-surface font-semibold">{user.fullName}</span>?
+        </p>
+
+        <div className="flex gap-3 justify-end pt-1">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            loading={loading}
+            onClick={onConfirm}
+            className="flex items-center gap-1.5"
+            id="admin-confirm-restore-doctor-btn"
+          >
+            <Icon name="person_check" className="text-base" />
+            <span>Restore Doctor</span>
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 export function AdminUsersPage() {
@@ -551,6 +806,9 @@ export function AdminUsersPage() {
   // Add doctor modal state
   const [isAddDoctorOpen, setIsAddDoctorOpen] = useState(false);
 
+  // Add administrator modal state
+  const [isAddAdminOpen, setIsAddAdminOpen] = useState(false);
+
   // Status update modal state
   const [confirmModal, setConfirmModal] = useState({
     open: false,
@@ -567,6 +825,13 @@ export function AdminUsersPage() {
     user: null,
   });
   const [removeDoctorLoading, setRemoveDoctorLoading] = useState(false);
+
+  // Restore doctor modal state
+  const [restoreDoctorModal, setRestoreDoctorModal] = useState({
+    open: false,
+    user: null,
+  });
+  const [restoreDoctorLoading, setRestoreDoctorLoading] = useState(false);
 
   // Debounce search input
   const debounceTimer = useRef(null);
@@ -714,6 +979,45 @@ export function AdminUsersPage() {
     fetchUsers({ roleVal: 'DOCTOR' });
   };
 
+  const openRestoreDoctorModal = (user) => {
+    setStatusError(null);
+    setStatusSuccess(null);
+    setRestoreDoctorModal({ open: true, user });
+  };
+
+  const closeRestoreDoctorModal = () => {
+    if (!restoreDoctorLoading) {
+      setRestoreDoctorModal({ open: false, user: null });
+    }
+  };
+
+  const handleRestoreDoctorConfirm = async () => {
+    const { user } = restoreDoctorModal;
+    if (!user) return;
+    setRestoreDoctorLoading(true);
+    setStatusError(null);
+    setStatusSuccess(null);
+    try {
+      const result = await adminService.restoreDoctor(user.id);
+      setStatusSuccess(result.message || `Doctor ${user.fullName} restored successfully.`);
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, status: 'ACTIVE' } : u))
+      );
+      setRestoreDoctorModal({ open: false, user: null });
+    } catch (err) {
+      setStatusError(err.message || 'Failed to restore doctor.');
+    } finally {
+      setRestoreDoctorLoading(false);
+    }
+  };
+
+  const handleAddAdminSuccess = (createdData) => {
+    const adminName = createdData.user?.fullName || 'Administrator';
+    setStatusSuccess(`Administrator ${adminName} created successfully.`);
+    setIsAddAdminOpen(false);
+    fetchUsers({ roleVal: 'ADMIN' });
+  };
+
   // Dismiss transient success/error banners
   useEffect(() => {
     if (!statusSuccess) return;
@@ -771,6 +1075,18 @@ export function AdminUsersPage() {
               >
                 <Icon name="person_add" className="text-base" />
                 <span>Add Doctor</span>
+              </Button>
+            )}
+            {activeTab === 'ADMIN' && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsAddAdminOpen(true)}
+                id="admin-add-administrator-btn"
+                className="flex items-center gap-1.5 shadow-sm"
+              >
+                <Icon name="admin_panel_settings" className="text-base" />
+                <span>+ Add Administrator</span>
               </Button>
             )}
             <Button
@@ -1013,17 +1329,31 @@ export function AdminUsersPage() {
                         </Button>
                       )
                     ) : user.role === 'DOCTOR' ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openRemoveDoctorModal(user)}
-                        className="text-error border-error/30 hover:bg-error/5 text-xs"
-                        title={`Remove ${user.fullName}`}
-                        id={`admin-remove-doctor-${user.id}`}
-                      >
-                        <Icon name="person_remove" className="text-base mr-1" />
-                        Remove Doctor
-                      </Button>
+                      user.status === 'INACTIVE' ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openRestoreDoctorModal(user)}
+                          className="text-[#2e7d32] border-[#a5d6a7] hover:bg-[#e8f5e9] text-xs"
+                          title={`Restore ${user.fullName}`}
+                          id={`admin-restore-doctor-${user.id}`}
+                        >
+                          <Icon name="restore" className="text-base mr-1" />
+                          Restore Doctor
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openRemoveDoctorModal(user)}
+                          className="text-error border-error/30 hover:bg-error/5 text-xs"
+                          title={`Remove ${user.fullName}`}
+                          id={`admin-remove-doctor-${user.id}`}
+                        >
+                          <Icon name="person_remove" className="text-base mr-1" />
+                          Remove Doctor
+                        </Button>
+                      )
                     ) : null /* PATIENT rows: no action completely */}
                   </div>
                 </div>
@@ -1074,6 +1404,28 @@ export function AdminUsersPage() {
           onSuccess={handleAddDoctorSuccess}
         />
       )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Add Administrator Modal */}
+      {/* ------------------------------------------------------------------ */}
+      {isAddAdminOpen && (
+        <AddAdministratorModal
+          isOpen={isAddAdminOpen}
+          onClose={() => setIsAddAdminOpen(false)}
+          onSuccess={handleAddAdminSuccess}
+        />
+      )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Restore Doctor Confirmation Modal */}
+      {/* ------------------------------------------------------------------ */}
+      <RestoreDoctorConfirmModal
+        isOpen={restoreDoctorModal.open}
+        onClose={closeRestoreDoctorModal}
+        onConfirm={handleRestoreDoctorConfirm}
+        user={restoreDoctorModal.user}
+        loading={restoreDoctorLoading}
+      />
     </div>
   );
 }
